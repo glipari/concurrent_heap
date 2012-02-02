@@ -1,0 +1,23 @@
+;; Object fine_grain_lock
+;; EDE project file.
+(ede-proj-project "fine_grain_lock"
+  :name "fine_grain_lock"
+  :file "Project.ede"
+  :targets (list 
+   (ede-proj-target-makefile-program "main"
+    :name "main"
+    :path ""
+    :source '("heap.h" "heap.c" "main.c")
+    :configuration-variables '(("default" ("CFLAGS" . "-g")))
+    )
+   (ede-proj-target-makefile-program "test_concurrent"
+    :name "test_concurrent"
+    :path ""
+    :source '("heap.c" "test_concurrent.c")
+    :auxsource '("heap.h")
+    :configuration-variables '(("debug" ("LDFLAGS" . "-pthread")))
+    :ldlibs '("pthreads")
+    )
+   )
+  :configuration-variables '(("debug" ("CFLAGS" . "-g")))
+  )
