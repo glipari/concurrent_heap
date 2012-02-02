@@ -1,0 +1,17 @@
+4), Finishing, new dline 980
+4), Finishing, new dline 1419
+4), Finishing, new dline 2139
+4), Arrival dline 551
+3), Arrival dline 510
+0), Finishing, new dline 383
+15), Arrival dline 25
+1), Finishing, new dline 391
+12), Finishing, new dline 91
+5), Finishing, new dline 555
+6), Finishing, new dline 888
+13), Arrival dline 781
+14), Arrival dline 18
+7), Finishing, new dline 461
+Node 4 has deadline 2139 which is smaller than its left child (9) deadline 2147483647
+Errore!!!
+
