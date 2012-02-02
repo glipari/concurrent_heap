@@ -6,7 +6,7 @@
 
 //#define VERBOSE 
 
-#define NPROCESSORS    16
+#define NPROCESSORS    8    
 #define NCYCLES        1000000
 #define DMIN           10
 #define DMAX           100

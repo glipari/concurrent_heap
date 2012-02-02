@@ -119,11 +119,10 @@ int heap_preempt(heap_t *h, int proc, u64 newdline)
 }
 
 
-// the path is on the stack: now I should lock from top until n
-// the problem is that n could move up in the meanwhile
-// however it will stay within the path (no other choice!)
+// the path is on the stack: now I should lock from top until proc
+// the problem is that proc could move up in the meanwhile!
 #define STACKSIZE  10   /* needs to be > log_2(nproc) */
-#define STACKBASE  0   /* base of stack from the middle */
+#define STACKBASE  0   
 
 void heap_finish(heap_t *h, int proc, u64 deadline)
 {
@@ -222,8 +221,9 @@ int heap_check(heap_t *h)
         flag = 0;
     }
 
-    for (i=0; i<h->nproc; i++) 
-        UNLOCK(h, i);
+    if (flag == 1) 
+	for (i=0; i<h->nproc; i++) 
+            UNLOCK(h, i);
 
     return flag;
 }
