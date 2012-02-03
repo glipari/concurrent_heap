@@ -236,8 +236,6 @@ int heap_check(heap_t *h)
     return flag;
 }
 
-
-
 int heap_save(heap_t *h, FILE *f)
 {
     int i;

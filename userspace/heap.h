@@ -30,7 +30,7 @@ typedef struct _heap {
     node_t *nodes;
 } heap_t;
 
-#define DLINE(h,x) ((x<h->nproc) ? h->array[x].node->deadline : -1)
+#define DLINE(h,x) ((x<h->nproc) ? h->array[x].node->deadline : 0)
 #define ARRAY_PNODE(h, i) (h->array[i].node)
 #define PNODE_DLINE(h, p) (h->nodes[p].deadline)
 
