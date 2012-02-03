@@ -87,13 +87,14 @@ void *processor(void *arg)
         }
         case FINISH:
         {
+            PRINT_OP(index, "finishing", curr_deadline);
             curr_clock = PNODE_DLINE((&heap), index);
             if (curr_clock < DLINE_MAX) {
                 curr_deadline = arrival_process(curr_clock);
-                if (curr_deadline < curr_clock) break;
-                
-                PRINT_OP(index, "finishing", curr_deadline);
-                heap_finish(&heap, index, curr_deadline);
+                if (heap_finish(&heap, index, curr_deadline)) 
+                    curr_clock = curr_deadline;
+                else 
+                    curr_deadline = heap_get_max_node(&heap)->deadline;
                 num_finish[index]++;
             }
             

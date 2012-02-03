@@ -124,7 +124,7 @@ int heap_preempt(heap_t *h, int proc, u64 newdline)
 #define STACKSIZE  10   /* needs to be > log_2(nproc) */
 #define STACKBASE  0   
 
-void heap_finish(heap_t *h, int proc, u64 deadline)
+int heap_finish(heap_t *h, int proc, u64 deadline)
 {
     int path[STACKSIZE];                     
     int top = STACKBASE, base = STACKBASE;              
@@ -148,8 +148,15 @@ void heap_finish(heap_t *h, int proc, u64 deadline)
     }
 
     /* now, everything is locked from 0 to j included */
-    k = path[base];
     /* assumption: dline > j->dline */
+    /* we now check the assumption, otherwise abort */
+    if (deadline <= p_proc->deadline) {
+        /* unlock everything and return */
+        for (i=0; i<=j; i++) UNLOCK(h, i);
+        return 0;
+    }
+    /* now the assumption holds */
+    k = path[base];
     while (dl_time_before(deadline, DLINE(h, k))) { 
         UNLOCK(h, k);
         k = path[++base];          /* move to child on path */
@@ -166,6 +173,7 @@ void heap_finish(heap_t *h, int proc, u64 deadline)
         ARRAY_PNODE(h, path[i])->position = path[i];
         UNLOCK(h,path[i]);
     }
+    return 1;
 }
 
 
