@@ -8,7 +8,7 @@
 typedef unsigned long long u64;
 typedef long long s64;
 
-#define DLINE_MAX LONG_MAX
+#define DLINE_MAX (LONG_MAX - 10)
 
 typedef struct _node {
     int proc_index;
@@ -34,6 +34,7 @@ typedef struct _heap {
 #define ARRAY_PNODE(h, i) (h->array[i].node)
 #define PNODE_DLINE(h, p) (h->nodes[p].deadline)
 
+int dl_time_before(u64 a, u64 b);
 
 void heap_init(heap_t *h, int nproc);
 void heap_delete(heap_t *h);

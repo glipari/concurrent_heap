@@ -29,7 +29,7 @@
 #define PRINT(x)
 #endif
 
-static inline int dl_time_before(u64 a, u64 b)
+int dl_time_before(u64 a, u64 b)
 {
 	return (s64)(a - b) < 0;
 }
@@ -152,7 +152,7 @@ int heap_finish(heap_t *h, int proc, u64 deadline)
     /* we now check the assumption, otherwise abort */
     if (dl_time_before(deadline, p_proc->deadline)) {
         /* unlock everything and return */
-        for (i=0; i<=j; i++) UNLOCK(h, i);
+        for (i=0; i<top; i++) UNLOCK(h, path[i]);
         return 0;
     }
     /* now the assumption holds */

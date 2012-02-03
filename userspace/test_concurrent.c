@@ -34,7 +34,7 @@ operation_t select_operation()
     return SLEEP;
 }
 
-int arrival_process(int curr_clock)
+u64 arrival_process(u64 curr_clock)
 {
     return curr_clock + (rand() % (DMAX - DMIN)) + DMIN; 
 }
@@ -57,15 +57,15 @@ void *processor(void *arg)
     int index = *((int*)arg);
     int i;
 
-    int curr_deadline = 0;
-    int curr_clock = 0;
+    u64 curr_deadline = 0;
+    u64 curr_clock = 0;
     
     for (i=0; i<NCYCLES; i++) {
         operation_t op = select_operation();
         switch(op) {
         case ARRIVAL: 
         {
-            int dline = arrival_process(curr_clock);
+            u64 dline = arrival_process(curr_clock);
             //if (dline < curr_clock) break;           
             PRINT_OP(index, "arrival", dline);
             int res;
@@ -73,9 +73,9 @@ void *processor(void *arg)
             do {
                 res = 1;
                 node_t *pn = heap_get_max_node(&heap);
-                int latest = pn->deadline;
+                u64 latest = pn->deadline;
                 proc = pn->proc_index;
-                if (dline < latest)  
+                if (dl_time_before(dline, latest))  
                     res = heap_preempt(&heap, proc, dline);
             } while (res == 0);
             if (proc == index) {
@@ -89,7 +89,7 @@ void *processor(void *arg)
         {
             PRINT_OP(index, "finishing", curr_deadline);
             curr_clock = PNODE_DLINE((&heap), index);
-            if (curr_clock < DLINE_MAX) {
+            if (dl_time_before(curr_clock, DLINE_MAX)) {
                 curr_deadline = arrival_process(curr_clock);
                 if (heap_finish(&heap, index, curr_deadline)) 
                     curr_clock = curr_deadline;
