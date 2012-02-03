@@ -150,7 +150,7 @@ int heap_finish(heap_t *h, int proc, u64 deadline)
     /* now, everything is locked from 0 to j included */
     /* assumption: dline > j->dline */
     /* we now check the assumption, otherwise abort */
-    if (deadline <= p_proc->deadline) {
+    if (dl_time_before(deadline, p_proc->deadline)) {
         /* unlock everything and return */
         for (i=0; i<=j; i++) UNLOCK(h, i);
         return 0;
