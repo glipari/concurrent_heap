@@ -43,6 +43,7 @@ void heap_delete(heap_t *h);
 #define heap_parent(index) (((index)-1)>>1)
 #define heap_get_max_proc(h) ((h)->array[0].node->proc_index)
 #define heap_get_max_dline(h) ((h)->array[0].node->deadline)
+#define heap_get_max_node(h) ((h)->array[0].node)
 
 int heap_preempt(heap_t *h, int proc, u64 newdline);
 void heap_finish(heap_t *h, int proc, u64 deadline);

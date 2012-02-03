@@ -59,7 +59,6 @@ void *processor(void *arg)
 
     int curr_deadline = 0;
     int curr_clock = 0;
-    int proc = -1;
     
     for (i=0; i<NCYCLES; i++) {
         operation_t op = select_operation();
@@ -67,14 +66,15 @@ void *processor(void *arg)
         case ARRIVAL: 
         {
             int dline = arrival_process(curr_clock);
-            if (dline < curr_clock) break;
+            //if (dline < curr_clock) break;           
             PRINT_OP(index, "arrival", dline);
             int res;
-            proc = -1;
+            int proc = -1;
             do {
                 res = 1;
-                int latest = heap_get_max_dline(&heap);
-                proc = heap_get_max_proc(&heap);
+                node_t *pn = heap_get_max_node(&heap);
+                int latest = pn->deadline;
+                proc = pn->proc_index;
                 if (dline < latest)  
                     res = heap_preempt(&heap, proc, dline);
             } while (res == 0);
@@ -101,12 +101,14 @@ void *processor(void *arg)
         }
         case SLEEP:
         {
-            /* printf("%d), Sleeping\n", index); */
             unsigned long k;
             unsigned long delay = rand() % WAITCYCLE;
             for (k=0;k < delay;k++);  
             break;
         }
+        default: 
+            printf("???? Operation unkown");
+            exit(-1);
         }
     }
 }
@@ -118,13 +120,16 @@ void *checker(void *arg)
     while(1) {
         flag = heap_check(&heap);
         if (!flag) {
+            // lock has not been released!
             printf("Errore!!!\n");
             FILE *myfile = fopen("error_heap.txt", "w");
             heap_save(&heap, myfile);
             fclose(myfile);
             exit(-1);
         }
-        else printf("%d) Checker: OK!\r", count++);
+        else 
+            // lock released
+            printf("%d) Checker: OK!\r", count++);
         usleep(10);
     }
 }
