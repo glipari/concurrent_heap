@@ -36,17 +36,20 @@ void exchange(array_heap_t *h, int a, int b) {
 	h->cpu_to_idx[cpu_a] = cpu_tmp;
 }
 
-void array_heap_init(array_heap_t *h) {
+void array_heap_init(array_heap_t *h, int nproc) {
 	int i;
 
 	pthread_spin_init(&h->lock, 0);
 	h->size = 0;
-	for (i = 0; i < NR_CPUS; i++) {
+	h->cpu_to_idx = (int*)malloc(sizeof(int)*nproc);
+	h->elements = (item*)malloc(sizeof(item)*nproc);
+
+	for (i = 0; i < nproc; i++) {
 		h->cpu_to_idx[i] = IDX_INVALID;
 	}
 }
 
-void print_array_heap(array_heap_t *h) {
+void print_array_heap(array_heap_t *h, int nproc) {
 	int i;
 
 	pthread_spin_lock(&h->lock);
@@ -56,11 +59,11 @@ void print_array_heap(array_heap_t *h) {
 		printf("(%d, %lu, %d %d %d) ", h->elements[i].cpu, h->elements[i].dl,
 				parent(i), left_child(i), right_child(i));
 	printf("] ");
-	for (i = h->size; i < NR_CPUS; i++)
+	for (i = h->size; i < nproc; i++)
 		printf("(%d, %lu) ", h->elements[i].cpu, h->elements[i].dl);
 	printf("\n");
 	printf("Cpu_to_idx:");
-	for (i = 0; i < NR_CPUS; i++)
+	for (i = 0; i < nproc; i++)
 		printf(" %d", h->cpu_to_idx[i]);
 	printf("\n");
 	pthread_spin_unlock(&h->lock);
@@ -96,9 +99,12 @@ void max_heapify(array_heap_t *h, int idx, int *new_idx) {
 int heap_insert(array_heap_t *h, long dl, int cpu) {
 	int idx, old_idx;
 
-	if (cpu > ELEM_NUM) {
-		printf("warning: cpu = %d\n", cpu);
-	}
+	/*
+	 * if (cpu > ELEM_NUM) {
+	 *	printf("warning: cpu = %d\n", cpu);
+	 * }
+	 */
+
 	pthread_spin_lock(&h->lock);
 	if (dl == DL_INVALID) {
 		/*h->elements[old_idx].dl = dl;*/
@@ -179,9 +185,12 @@ int heap_extract_max(array_heap_t *h, int cpu) {
  * Returns the new idx for that element.
  */
 int heap_change_key(array_heap_t *h, int idx, long new_dl) {
-	if (idx > ELEM_NUM) {
-		printf("warning: idx = %d\n", idx);
-	}
+	/*
+	 * if (idx > ELEM_NUM) {
+	 *	printf("warning: idx = %d\n", idx);
+	 * }
+	 */
+
 	if (new_dl < h->elements[idx].dl) {
 		/*printf("decreasing key for element: %d\n", idx);*/
 		h->elements[idx].dl = new_dl;

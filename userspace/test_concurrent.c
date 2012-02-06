@@ -182,15 +182,18 @@ int main(int argc, char **argv)
     switch (data_type) {
 	    case HEAP:
     		printf("Initializing the heap\n");
+    		heap_init(&heap, NPROCESSORS);
 		break;
 	    case ARRAY_HEAP:
     		printf("Initializing the array heap\n");
+		array_heap_init(&array_heap, NPROCESSORS);
 		break;
+	    case SKIPLIST:
+		printf("Not yet implemented!\n");
+		exit(-1);
 	    default:
 		exit(-1);
     }
-    
-    heap_init(&heap, NPROCESSORS);
     
     printf("Creating Checker\n");
 
