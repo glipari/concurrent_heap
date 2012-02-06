@@ -1,4 +1,5 @@
 #include "heap.h"
+#include "array_heap.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
@@ -20,8 +21,10 @@
 #endif
 
 heap_t heap;
+array_heap_t array_heap;
 pthread_t threads[NPROCESSORS];
 
+typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2} data_struct_t;
 typedef enum {ARRIVAL=0, FINISH=1, SLEEP=2} operation_t;
 double prob[3] = {.1, .2, 1}; // 10% probability of new arrival, 10% of finishing the job, 80% of sleeping for 1 usec
 
@@ -140,15 +143,52 @@ void *checker(void *arg)
     }
 }
 
-int main()
+data_struct_t parse_user_options(int argc, char **argv)
+{
+	data_struct_t data_type = HEAP;
+	int c;
+
+	while ((c = getopt(argc, argv, "has")) != -1)
+		switch (c) {
+			case 'h':
+				data_type = HEAP;
+				break;
+			case 'a':
+				data_type = ARRAY_HEAP;
+				break;
+			case 's':
+				data_type = SKIPLIST;
+				break;
+			default:
+				printf("data_type is not valid!\n");
+				exit(-1);
+		}
+
+	return data_type;
+}
+
+int main(int argc, char **argv)
 {
     pthread_t check;
+    data_struct_t data_type;
     int ind[NPROCESSORS];
     int i;
 
     signal(SIGINT, signal_handler);
 
-    printf("Initializing the heap\n");
+
+    data_type = parse_user_options(argc, argv);
+
+    switch (data_type) {
+	    case HEAP:
+    		printf("Initializing the heap\n");
+		break;
+	    case ARRAY_HEAP:
+    		printf("Initializing the array heap\n");
+		break;
+	    default:
+		exit(-1);
+    }
     
     heap_init(&heap, NPROCESSORS);
     
