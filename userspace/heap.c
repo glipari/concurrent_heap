@@ -183,6 +183,10 @@ int heap_finish(heap_t *h, int proc, dline_t deadline)
         ARRAY_PNODE(h, path[i]) = p;
         p = q;
         ARRAY_PNODE(h, path[i])->position = path[i];
+        //UNLOCK(h,path[i]);
+    }
+
+    for (i = base; i<top; i++) {
         UNLOCK(h,path[i]);
     }
     return 1;
@@ -215,7 +219,7 @@ int heap_check(heap_t *h)
     /* lock everything */
     for (i=0; i<h->nproc; i++) 
         LOCK(h, i);
-
+    
     for (i=0; i<h->nproc; i++) {
         if (ARRAY_PNODE(h, i)->position != i) {
             printf("Node %d contains processor %d, which is registered at position %d\n", 
