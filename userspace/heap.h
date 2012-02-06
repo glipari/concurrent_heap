@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <linux/types.h>
 
 typedef unsigned long long u64;
 typedef long long s64;
@@ -45,8 +46,8 @@ typedef struct _heap {
 #define ARRAY_PNODE(h, i) (h->array[i].node)
 #define PNODE_DLINE(h, p) (h->nodes[p].deadline)
 
-void heap_init(heap_t *h, int nproc);
-void heap_delete(heap_t *h);
+void heap_init(void *s, int nproc);
+void heap_delete(void *s);
 
 #define heap_left(index) (2*(index)+1)
 #define heap_right(index) (2*(index)+2)
@@ -55,12 +56,12 @@ void heap_delete(heap_t *h);
 #define heap_get_max_dline(h) ((h)->array[0].node->deadline)
 #define heap_get_max_node(h) ((h)->array[0].node)
 
-int heap_preempt(heap_t *h, int proc, dline_t newdline);
+int heap_preempt(void *s, int proc, __u64 newdline);
 int heap_finish(heap_t *h, int proc, dline_t deadline);
-void heap_print(heap_t *h);
-int heap_check(heap_t *h);
+void heap_print(void *s);
+int heap_check(void *s);
 
-int heap_save(heap_t *h, FILE *f);
-int heap_load(heap_t *h, FILE *f);
+void heap_save(void *s, FILE *f);
+void heap_load(void *s, FILE *f);
 
 #endif

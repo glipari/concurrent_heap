@@ -23,15 +23,15 @@ struct heap_struct {
 };
 typedef struct heap_struct array_heap_t;
 
-void array_heap_init(array_heap_t *h, int nproc);
+void array_heap_init(void *s, int nproc);
 
 void print_array_heap(array_heap_t *h, int nproc);
 
 void max_heapify(array_heap_t *h, int idx, int *new_idx);
 
-int heap_insert(array_heap_t *h, long dl, int cpu);
+int heap_insert(void *s, int cpu, __u64 dl);
 
-int heap_maximum(array_heap_t *h);
+int heap_maximum(void *s);
 
 int heap_extract_max(array_heap_t *h, int cpu);
 

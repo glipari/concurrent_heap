@@ -1,10 +1,11 @@
-#include "heap.h"
-#include "array_heap.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
 #include <signal.h>
 #include <unistd.h>
+#include "heap.h"
+#include "array_heap.h"
+#include "common_ops.h"
 
 //#define VERBOSE 
 
@@ -23,6 +24,9 @@
 heap_t heap;
 array_heap_t array_heap;
 pthread_t threads[NPROCESSORS];
+struct data_struct_ops *dso;
+extern struct data_struct_ops array_heap_ops;
+extern struct data_struct_ops heap_ops;
 
 typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2} data_struct_t;
 typedef enum {ARRIVAL=0, FINISH=1, SLEEP=2} operation_t;
@@ -83,7 +87,8 @@ void *processor(void *arg)
                 dline_t latest = pn->deadline;
                 proc = pn->proc_index;
                 if (dl_time_before(dline, latest))  
-                    res = heap_preempt(&heap, proc, dline);
+                    //res = heap_preempt(&heap, proc, dline.value);
+                    res = dso->data_set(&heap, proc, dline.value);
             } while (res == 0);
             if (proc == index) {
                 curr_clock = curr_deadline;
@@ -131,7 +136,8 @@ void *checker(void *arg)
     while(1) {
 	    switch (*pdata_type) {
 		    case HEAP:
-        		flag = heap_check(&heap);
+        		//flag = heap_check(&heap);
+        		flag = dso->data_check(&heap);
         		if (!flag) {
             			// lock has not been released!
             			printf("Errore!!!\n");
@@ -174,9 +180,11 @@ data_struct_t parse_user_options(int argc, char **argv)
 		switch (c) {
 			case 'h':
 				data_type = HEAP;
+				dso = &heap_ops;
 				break;
 			case 'a':
 				data_type = ARRAY_HEAP;
+				dso = &array_heap_ops;
 				break;
 			case 's':
 				data_type = SKIPLIST;
@@ -204,11 +212,13 @@ int main(int argc, char **argv)
     switch (data_type) {
 	    case HEAP:
     		printf("Initializing the heap\n");
-    		heap_init(&heap, NPROCESSORS);
+    		//heap_init(&heap, NPROCESSORS);
+		dso->data_init(&heap, NPROCESSORS);
 		break;
 	    case ARRAY_HEAP:
     		printf("Initializing the array heap\n");
-		array_heap_init(&array_heap, NPROCESSORS);
+		//array_heap_init(&array_heap, NPROCESSORS);
+		dso->data_init(&array_heap, NPROCESSORS);
 		break;
 	    case SKIPLIST:
 		printf("Not yet implemented!\n");

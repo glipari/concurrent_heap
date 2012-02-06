@@ -7,7 +7,9 @@
 #include <limits.h>
 #include <time.h>
 #include <pthread.h>
+#include <linux/types.h>
 #include "array_heap.h"
+#include "common_ops.h"
 
 static inline int parent(int i) {
         return (i - 1) >> 1;
@@ -36,8 +38,9 @@ void exchange(array_heap_t *h, int a, int b) {
 	h->cpu_to_idx[cpu_a] = cpu_tmp;
 }
 
-void array_heap_init(array_heap_t *h, int nproc) {
+void array_heap_init(void *s, int nproc) {
 	int i;
+	array_heap_t *h = (array_heap_t*) s;
 
 	pthread_spin_init(&h->lock, 0);
 	h->size = 0;
@@ -56,11 +59,11 @@ void print_array_heap(array_heap_t *h, int nproc) {
 	printf("Heap (%d elements):\n", h->size);
 	printf("[ ");
 	for (i = 0; i < h->size; i++)
-		printf("(%d, %lu, %d %d %d) ", h->elements[i].cpu, h->elements[i].dl,
+		printf("(%d, %llu, %d %d %d) ", h->elements[i].cpu, h->elements[i].dl,
 				parent(i), left_child(i), right_child(i));
 	printf("] ");
 	for (i = h->size; i < nproc; i++)
-		printf("(%d, %lu) ", h->elements[i].cpu, h->elements[i].dl);
+		printf("(%d, %llu) ", h->elements[i].cpu, h->elements[i].dl);
 	printf("\n");
 	printf("Cpu_to_idx:");
 	for (i = 0; i < nproc; i++)
@@ -93,11 +96,37 @@ void max_heapify(array_heap_t *h, int idx, int *new_idx) {
 	return;
 }
 
+/* Sets a new key for the element at position idx.
+ * Returns the new idx for that element.
+ */
+int heap_change_key(array_heap_t *h, int idx, long new_dl) {
+	/*
+	 * if (idx > ELEM_NUM) {
+	 *	printf("warning: idx = %d\n", idx);
+	 * }
+	 */
+
+	if (new_dl < h->elements[idx].dl) {
+		/*printf("decreasing key for element: %d\n", idx);*/
+		h->elements[idx].dl = new_dl;
+		max_heapify(h, idx, &idx);
+	} else {
+		h->elements[idx].dl = new_dl;
+		while (idx > 0 && h->elements[parent(idx)].dl < h->elements[idx].dl) {
+			exchange(h, idx, parent(idx));
+			idx = parent(idx);
+		}
+	}
+
+	return idx;
+}
+
 /* Inserts a new key in the heap.
  * Returns the position where the new element has been added.
  */
-int heap_insert(array_heap_t *h, long dl, int cpu) {
+int heap_insert(void *s, int cpu, __u64 dl) {
 	int idx, old_idx;
+	array_heap_t *h = (array_heap_t*) s;
 
 	/*
 	 * if (cpu > ELEM_NUM) {
@@ -142,7 +171,9 @@ int heap_insert(array_heap_t *h, long dl, int cpu) {
 	return idx;
 }
 
-int heap_maximum(array_heap_t *h) {
+int heap_maximum(void *s) {
+	array_heap_t *h = (array_heap_t*) s;
+
 	return h->elements[0].cpu;
 }
 
@@ -181,31 +212,6 @@ int heap_extract_max(array_heap_t *h, int cpu) {
 	return max;
 }
 
-/* Sets a new key for the element at position idx.
- * Returns the new idx for that element.
- */
-int heap_change_key(array_heap_t *h, int idx, long new_dl) {
-	/*
-	 * if (idx > ELEM_NUM) {
-	 *	printf("warning: idx = %d\n", idx);
-	 * }
-	 */
-
-	if (new_dl < h->elements[idx].dl) {
-		/*printf("decreasing key for element: %d\n", idx);*/
-		h->elements[idx].dl = new_dl;
-		max_heapify(h, idx, &idx);
-	} else {
-		h->elements[idx].dl = new_dl;
-		while (idx > 0 && h->elements[parent(idx)].dl < h->elements[idx].dl) {
-			exchange(h, idx, parent(idx));
-			idx = parent(idx);
-		}
-	}
-
-	return idx;
-}
-
 int array_heap_check(array_heap_t *h)
 {
 	return 1;
@@ -215,3 +221,21 @@ void array_heap_save(array_heap_t *h, FILE *f)
 {
 	return;
 }
+
+void array_heap_cleanup(void *s, int nproc)
+{
+	return;
+}
+
+int array_heap_find(void *s)
+{
+	return 0;
+}
+
+const struct data_struct_ops array_heap_ops = {
+	.data_init = array_heap_init,
+	.data_cleanup = array_heap_cleanup,
+	.data_set = heap_insert,
+	.data_find = array_heap_find,
+	.data_max = heap_maximum,
+};

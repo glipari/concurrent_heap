@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "heap.h"
+#include "common_ops.h"
 
 #ifndef SEQUENTIAL 
 #define LOCK(h,x)                                                       \
@@ -61,9 +62,10 @@ int max_dline_proc(heap_t *h, int a, int b, int c)
     return dl_time_before(DLINE(h, c), DLINE(h, proc)) ? proc : c;
 }
 
-void heap_init(heap_t *h, int nproc)
+void heap_init(void *s, int nproc)
 {
     int i;
+    heap_t *h = (heap_t*) s;
     h->array = (heap_node_t *)malloc(sizeof(heap_node_t)*nproc);
     h->nproc = nproc;
     h->nodes = (node_t*)malloc(sizeof(node_t)*nproc);
@@ -78,17 +80,22 @@ void heap_init(heap_t *h, int nproc)
     }    
 }
 
-void heap_delete(heap_t *h)
+void heap_delete(void *s)
 {
     int i;
+    heap_t *h = (heap_t*) s;
     for (i=0; i<h->nproc; i++) 
         pthread_mutex_destroy(&(h->array[i].m));
     free(h->nodes);
     free(h->array);
 }
 
-int heap_preempt(heap_t *h, int proc, dline_t newdline)
+int heap_preempt(void *s, int proc, __u64 dl)
 {
+    heap_t *h = (heap_t*) s;
+    dline_t newdline;
+    newdline.value = dl;
+    newdline.special = DL_NORMAL;
     LOCK(h, 0);
     /* check if still the same */
     if (proc != h->array[0].node->proc_index) {
@@ -193,9 +200,10 @@ int heap_finish(heap_t *h, int proc, dline_t deadline)
 }
 
 
-void heap_print(heap_t *h)
+void heap_print(void *s)
 {
     int i;
+    heap_t *h = (heap_t*) s;
     printf("[\n");
     for (i=0; i<h->nproc; i++) {
         printf("  pos: %d = (pr %d, dl %llu (%d), lk %d", i, 
@@ -210,12 +218,13 @@ void heap_print(heap_t *h)
 }
 
 
-int heap_check(heap_t *h)
+int heap_check(void *s)
 {
     /* check order */
     int i;
     int sum=0;
     int flag = 1;
+    heap_t *h = (heap_t*) s;
     /* lock everything */
     for (i=0; i<h->nproc; i++) 
         LOCK(h, i);
@@ -255,9 +264,10 @@ int heap_check(heap_t *h)
     return flag;
 }
 
-int heap_save(heap_t *h, FILE *f)
+void heap_save(void *s, FILE *f)
 {
     int i;
+    heap_t *h = (heap_t*) s;
     fprintf(f, "N_Nodes: %d\n", h->nproc);
     
     for (i=0; i<h->nproc; i++) {
@@ -269,13 +279,14 @@ int heap_save(heap_t *h, FILE *f)
     }
 }
 
-int heap_load(heap_t *h, FILE *f)
+void heap_load(void *s, FILE *f)
 {
     char str[100];
     int n, i;
     int k;
     dline_t d;
     int x;
+    heap_t *h = (heap_t*) s;
     fscanf(f, "%s %d\n", str, &n);
 
     heap_init(h, n);
@@ -289,3 +300,15 @@ int heap_load(heap_t *h, FILE *f)
         h->array[i].node = &h->nodes[k];
     }
 }
+
+const struct data_struct_ops heap_ops = {
+	.data_init = heap_init,
+	.data_cleanup = heap_delete,
+	.data_set = heap_preempt,
+	//.data_find = array_heap_find,
+	//.data_max = heap_maximum,
+	.data_load = heap_load,
+	.data_save = heap_save,
+	.data_check = heap_check,
+	.data_print = heap_print,
+};
