@@ -29,9 +29,21 @@
 #define PRINT(x)
 #endif
 
-int dl_time_before(u64 a, u64 b)
-{
-	return (s64)(a - b) < 0;
+dline_t DLINE_MAX = {0, DL_MAX};
+dline_t DLINE_MIN = {0, DL_MIN};
+
+
+int dl_time_before(dline_t a, dline_t b) {
+    if (a.special == DL_MIN) {
+        if (b.special == DL_MIN) return 0;
+        else return 1;
+    }
+    else if (a.special == DL_MAX) return 0;
+    else {
+        if (b.special == DL_MIN) return 0;
+        else if (b.special == DL_MAX) return 1;
+        else return ((s64)(a.value - b.value) < 0);
+    }
 }
 
 void heap_swap_nodes(heap_t *h, int n, int p)
@@ -43,10 +55,10 @@ void heap_swap_nodes(heap_t *h, int n, int p)
     h->array[p].node->position = p;
 }
 
-inline int max_dline_proc(heap_t *h, int a, int b, int c) 
+int max_dline_proc(heap_t *h, int a, int b, int c) 
 {
-    int tmp = dl_time_before(DLINE(h, b), DLINE(h, a)) ? a : b;
-    return dl_time_before(DLINE(h, c), DLINE(h, tmp)) ? tmp : c;
+    int proc = dl_time_before(DLINE(h, b), DLINE(h, a)) ? a : b;
+    return dl_time_before(DLINE(h, c), DLINE(h, proc)) ? proc : c;
 }
 
 void heap_init(heap_t *h, int nproc)
@@ -57,7 +69,7 @@ void heap_init(heap_t *h, int nproc)
     h->nodes = (node_t*)malloc(sizeof(node_t)*nproc);
     for (i=0; i<nproc; i++) {
         h->nodes[i].proc_index = i;
-        h->nodes[i].deadline = ULONG_MAX;
+        h->nodes[i].deadline = DLINE_MAX;
         h->nodes[i].position = i;
 
         h->array[i].node = &h->nodes[i];
@@ -75,7 +87,7 @@ void heap_delete(heap_t *h)
     free(h->array);
 }
 
-int heap_preempt(heap_t *h, int proc, u64 newdline)
+int heap_preempt(heap_t *h, int proc, dline_t newdline)
 {
     LOCK(h, 0);
     /* check if still the same */
@@ -124,7 +136,7 @@ int heap_preempt(heap_t *h, int proc, u64 newdline)
 #define STACKSIZE  10   /* needs to be > log_2(nproc) */
 #define STACKBASE  0   
 
-int heap_finish(heap_t *h, int proc, u64 deadline)
+int heap_finish(heap_t *h, int proc, dline_t deadline)
 {
     int path[STACKSIZE];                     
     int top = STACKBASE, base = STACKBASE;              
@@ -162,7 +174,7 @@ int heap_finish(heap_t *h, int proc, u64 deadline)
         k = path[++base];          /* move to child on path */
     }
     
-    /* now, everything locked from k to j, included */ 
+    /* now, everything locked from k to j included */ 
     node_t *p = ARRAY_PNODE(h,j);
     node_t *q = 0;
     ARRAY_PNODE(h,j)->deadline = deadline;
@@ -182,9 +194,10 @@ void heap_print(heap_t *h)
     int i;
     printf("[\n");
     for (i=0; i<h->nproc; i++) {
-        printf("  pos: %d = (pr %d, dl %llu, lk %d", i, 
+        printf("  pos: %d = (pr %d, dl %llu (%d), lk %d", i, 
                h->array[i].node->proc_index, 
-               h->array[i].node->deadline,
+               h->array[i].node->deadline.value,
+               h->array[i].node->deadline.special,
                h->array[i].locked);
         if (h->array[i].locked) printf(" id %ld)\n", h->array[i].id);
         else printf(")\n");
@@ -211,14 +224,16 @@ int heap_check(heap_t *h)
             break;
         } 
         if (dl_time_before(DLINE(h,i), DLINE(h,heap_left(i)))) {
-            printf("Node %d has deadline %llu which is smaller than its left child (%d) deadline %llu\n", 
-                   i, DLINE(h,i), heap_left(i), DLINE(h,heap_left(i)));
+            printf("Node %d has deadline %llu (%d) which is smaller than its left child (%d) deadline %llu (%d)\n", 
+                   i, DLINE(h,i).value, DLINE(h,i).special , 
+                   heap_left(i), DLINE(h,heap_left(i)).value, DLINE(h,heap_left(i)).special);
             flag = 0;
             break;
         }
         if (dl_time_before(DLINE(h,i), DLINE(h,heap_right(i)))) {
-            printf("Node %d has deadline %llu which is smaller than its right child (%d) deadline %llu\n", 
-                   i, DLINE(h,i), heap_right(i), DLINE(h,heap_right(i)));
+            printf("Node %d has deadline %llu (%d) which is smaller than its right child (%d) deadline %llu (%d)\n", 
+                   i, DLINE(h,i).value, DLINE(h,i).special, heap_right(i), 
+                   DLINE(h,heap_right(i)).value, DLINE(h,heap_right(i)).special);
             flag = 0;
             break;
         }
@@ -242,9 +257,11 @@ int heap_save(heap_t *h, FILE *f)
     fprintf(f, "N_Nodes: %d\n", h->nproc);
     
     for (i=0; i<h->nproc; i++) {
-        fprintf(f, "index %d\tdeadline %llu\n", 
+        fprintf(f, "index %d\tdeadline %llu type %d\n", 
                 h->array[i].node->proc_index, 
-                h->array[i].node->deadline);
+                h->array[i].node->deadline.value,
+                h->array[i].node->deadline.special
+            );
     }
 }
 
@@ -253,14 +270,16 @@ int heap_load(heap_t *h, FILE *f)
     char str[100];
     int n, i;
     int k;
-    u64 d;
+    dline_t d;
+    int x;
     fscanf(f, "%s %d\n", str, &n);
 
     heap_init(h, n);
     
     for (i=0; i<h->nproc; i++) {
         fscanf(f, "%s %d", str, &k);
-        fscanf(f, "%s %llu", str, &d);
+        fscanf(f, "%s %llu %d", str, &d.value, &x);
+        d.special = x;
         h->nodes[k].deadline = d;
         h->nodes[k].position = i;
         h->array[i].node = &h->nodes[k];

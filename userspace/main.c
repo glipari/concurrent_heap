@@ -8,13 +8,21 @@
 
 heap_t myheap;
 
+dline_t ask_deadline() {
+    dline_t deadline;
+    int x;
+    printf("Insert deadline.value and deadline.special (0 = min, 1 = normal, 2 = max): ");
+    scanf("%llu", &deadline.value);
+    scanf("%d", &x);
+    deadline.special = x;
+    return deadline;
+}
+
 void dline_insert()
 {
-    printf("Insert a deadline: ");
-    int deadline;
-    scanf("%d", &deadline);
+    dline_t deadline = ask_deadline();
     int p = heap_get_max_proc(&myheap);
-    if (heap_get_max_dline(&myheap) < deadline)
+    if (dl_time_before(heap_get_max_dline(&myheap), deadline))
         printf("Too large!\n");
     else {
         heap_preempt(&myheap, p, deadline);
@@ -32,10 +40,9 @@ void dline_update()
     if (proc >7 || proc <0) 
         printf("Wrong processor!\n");
     else {
-        printf("Insert a deadline: ");
-        int deadline;
-        scanf("%d", &deadline);
-        if (myheap.nodes[proc].deadline > deadline) 
+        dline_t deadline = ask_deadline();
+
+        if (dl_time_before(deadline, myheap.nodes[proc].deadline)) 
             printf("deadline too short\n");
         else {
             heap_finish(&myheap, proc, deadline);

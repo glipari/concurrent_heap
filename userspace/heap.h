@@ -8,11 +8,22 @@
 typedef unsigned long long u64;
 typedef long long s64;
 
-#define DLINE_MAX (LONG_MAX - 10)
+typedef enum{DL_MIN, DL_NORMAL, DL_MAX} dl_t;
+
+typedef struct __dline_struct {
+    u64 value;
+    dl_t special;
+} dline_t;
+
+int dl_time_before(dline_t a, dline_t b);
+
+extern dline_t DLINE_MAX;
+extern dline_t DLINE_MIN;
+
 
 typedef struct _node {
     int proc_index;
-    u64 deadline;
+    dline_t deadline;
     int position;
 } node_t;
 
@@ -30,11 +41,9 @@ typedef struct _heap {
     node_t *nodes;
 } heap_t;
 
-#define DLINE(h,x) ((x<h->nproc) ? h->array[x].node->deadline : 0)
+#define DLINE(h,x) ((x<h->nproc) ? h->array[x].node->deadline : DLINE_MIN)
 #define ARRAY_PNODE(h, i) (h->array[i].node)
 #define PNODE_DLINE(h, p) (h->nodes[p].deadline)
-
-int dl_time_before(u64 a, u64 b);
 
 void heap_init(heap_t *h, int nproc);
 void heap_delete(heap_t *h);
@@ -46,8 +55,8 @@ void heap_delete(heap_t *h);
 #define heap_get_max_dline(h) ((h)->array[0].node->deadline)
 #define heap_get_max_node(h) ((h)->array[0].node)
 
-int heap_preempt(heap_t *h, int proc, u64 newdline);
-int heap_finish(heap_t *h, int proc, u64 deadline);
+int heap_preempt(heap_t *h, int proc, dline_t newdline);
+int heap_finish(heap_t *h, int proc, dline_t deadline);
 void heap_print(heap_t *h);
 int heap_check(heap_t *h);
 

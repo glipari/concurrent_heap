@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <signal.h>
+#include <unistd.h>
 
 //#define VERBOSE 
 
@@ -13,7 +14,7 @@
 #define WAITCYCLE      10000
 
 #ifdef VERBOSE
-#define PRINT_OP(i, op, dline) printf("%d) %s, dline %d\n", i, op, dline)
+#define PRINT_OP(i, op, dline) printf("%d) %s, dline %llu (%d)\n", i, op, dline.value, dline.special)
 #else 
 #define PRINT_OP(i, op, dline) 
 #endif
@@ -34,9 +35,13 @@ operation_t select_operation()
     return SLEEP;
 }
 
-u64 arrival_process(u64 curr_clock)
+dline_t arrival_process(dline_t curr_clock)
 {
-    return curr_clock + (rand() % (DMAX - DMIN)) + DMIN; 
+    dline_t tmp = curr_clock;
+    tmp.special = DL_NORMAL;
+    tmp.value +=  (rand() % (DMAX - DMIN)) + DMIN;
+
+    return tmp;
 }
 
 int num_preemptions[NPROCESSORS];
@@ -57,23 +62,22 @@ void *processor(void *arg)
     int index = *((int*)arg);
     int i;
 
-    u64 curr_deadline = 0;
-    u64 curr_clock = 0;
+    dline_t curr_deadline = DLINE_MIN;
+    dline_t curr_clock = DLINE_MIN;
     
     for (i=0; i<NCYCLES; i++) {
         operation_t op = select_operation();
         switch(op) {
-        case ARRIVAL: 
+        case ARRIVAL:
         {
-            u64 dline = arrival_process(curr_clock);
-            //if (dline < curr_clock) break;           
+            dline_t dline = arrival_process(curr_clock);
             PRINT_OP(index, "arrival", dline);
             int res;
             int proc = -1;
             do {
                 res = 1;
                 node_t *pn = heap_get_max_node(&heap);
-                u64 latest = pn->deadline;
+                dline_t latest = pn->deadline;
                 proc = pn->proc_index;
                 if (dl_time_before(dline, latest))  
                     res = heap_preempt(&heap, proc, dline);
@@ -112,6 +116,7 @@ void *processor(void *arg)
             exit(-1);
         }
     }
+    return 0;
 }
 
 void *checker(void *arg)
@@ -147,16 +152,18 @@ int main()
     
     heap_init(&heap, NPROCESSORS);
     
+    printf("Creating Checker\n");
+
+    pthread_create(&check, 0, checker, 0);
+
+    //sleep(20);
+
     printf("Creating processors\n");
 
     for (i=0; i<NPROCESSORS; i++) {
         ind[i] = i;
         pthread_create(&threads[i], 0, processor, &ind[i]);
     }
-
-    printf("Creating Checker\n");
-
-    pthread_create(&check, 0, checker, 0);
 
     printf("Waiting for the end\n");
 
@@ -167,4 +174,5 @@ int main()
     }
     printf("--------------EVERYTHING OK!---------------------\n");
     
+    return 0;
 }
