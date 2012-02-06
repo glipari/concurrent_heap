@@ -21,6 +21,7 @@
 #define PRINT_OP(i, op, dline) 
 #endif
 
+void *data_struct;
 heap_t heap;
 array_heap_t array_heap;
 pthread_t threads[NPROCESSORS];
@@ -87,7 +88,6 @@ void *processor(void *arg)
                 dline_t latest = pn->deadline;
                 proc = pn->proc_index;
                 if (dl_time_before(dline, latest))  
-                    //res = heap_preempt(&heap, proc, dline.value);
                     res = dso->data_set(&heap, proc, dline.value);
             } while (res == 0);
             if (proc == index) {
@@ -131,43 +131,21 @@ void *checker(void *arg)
 {
     int flag;
     int count = 0;
-    data_struct_t* pdata_type = (data_struct_t*) arg;
 
     while(1) {
-	    switch (*pdata_type) {
-		    case HEAP:
-        		//flag = heap_check(&heap);
-        		flag = dso->data_check(&heap);
-        		if (!flag) {
-            			// lock has not been released!
-            			printf("Errore!!!\n");
-            			FILE *myfile = fopen("error_heap.txt", "w");
-            			heap_save(&heap, myfile);
-            			fclose(myfile);
-            			exit(-1);
-			}
-			break;
-		    case ARRAY_HEAP:
-        		flag = array_heap_check(&array_heap);
-        		if (!flag) {
-            			// lock has not been released!
-            			printf("Errore!!!\n");
-            			FILE *myfile =
-					fopen("error_array_heap.txt", "w");
-            			array_heap_save(&array_heap, myfile);
-            			fclose(myfile);
-            			exit(-1);
-			}
-			break;
-		    case SKIPLIST:
-			printf("skiplist checker..\n");
-			break;
-		    default:
-			exit(-1);
-        }
-        // lock released
-        printf("%d) Checker: OK!\r", count++);
-        usleep(10);
+    	flag = dso->data_check(data_struct);
+	if (!flag) {
+		// lock has not been released!
+		printf("Errore!!!\n");
+		FILE *myfile = fopen("error_heap.txt", "w");
+		dso->data_save(data_struct, myfile);
+		fclose(myfile);
+		exit(-1);
+	} else {
+        	// lock released
+        	printf("%d) Checker: OK!\r", count++);
+        	usleep(10);
+	}
     }
 }
 
@@ -176,15 +154,25 @@ data_struct_t parse_user_options(int argc, char **argv)
 	data_struct_t data_type = HEAP;
 	int c;
 
+	if (argc < 2) {
+		printf("usage: test_concurrent OPTION\n"
+			"\n\tOPTION:\n"
+			"\t  -a array_heap\n"
+			"\t  -h heap\n"
+			"\t  -s skiplist\n");
+		exit(-1);
+	}
 	while ((c = getopt(argc, argv, "has")) != -1)
 		switch (c) {
 			case 'h':
 				data_type = HEAP;
 				dso = &heap_ops;
+				data_struct = &heap;
 				break;
 			case 'a':
 				data_type = ARRAY_HEAP;
 				dso = &array_heap_ops;
+				data_struct = &array_heap;
 				break;
 			case 's':
 				data_type = SKIPLIST;
@@ -212,24 +200,21 @@ int main(int argc, char **argv)
     switch (data_type) {
 	    case HEAP:
     		printf("Initializing the heap\n");
-    		//heap_init(&heap, NPROCESSORS);
-		dso->data_init(&heap, NPROCESSORS);
 		break;
 	    case ARRAY_HEAP:
-    		printf("Initializing the array heap\n");
-		//array_heap_init(&array_heap, NPROCESSORS);
-		dso->data_init(&array_heap, NPROCESSORS);
-		break;
+    		printf("array_heap is not ready!\n");
+		exit(-1);
 	    case SKIPLIST:
-		printf("Not yet implemented!\n");
+		printf("skiplist is not yet implemented!\n");
 		exit(-1);
 	    default:
 		exit(-1);
     }
+    dso->data_init(data_struct, NPROCESSORS);
     
     printf("Creating Checker\n");
 
-    pthread_create(&check, 0, checker, &data_type);
+    pthread_create(&check, 0, checker, 0);
 
     //sleep(20);
 

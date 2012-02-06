@@ -6,7 +6,7 @@
 
 struct data_struct_ops {
 	void (*data_init) (void *s, int nproc);
-	void (*data_cleanup) (void *s, int nproc);
+	void (*data_cleanup) (void *s);
 
 	/*
 	 * Update CPU state inside the data structure

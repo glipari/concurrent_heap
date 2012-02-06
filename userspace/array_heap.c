@@ -222,7 +222,7 @@ void array_heap_save(array_heap_t *h, FILE *f)
 	return;
 }
 
-void array_heap_cleanup(void *s, int nproc)
+void array_heap_cleanup(void *s)
 {
 	return;
 }
