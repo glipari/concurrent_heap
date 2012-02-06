@@ -205,3 +205,13 @@ int heap_change_key(array_heap_t *h, int idx, long new_dl) {
 
 	return idx;
 }
+
+int array_heap_check(array_heap_t *h)
+{
+	return 1;
+}
+
+void array_heap_save(array_heap_t *h, FILE *f)
+{
+	return;
+}

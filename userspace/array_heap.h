@@ -36,3 +36,7 @@ int heap_maximum(array_heap_t *h);
 int heap_extract_max(array_heap_t *h, int cpu);
 
 int heap_increase_key(array_heap_t *h, int cpu, long new_dl);
+
+int array_heap_check(array_heap_t *h);
+
+void array_heap_save(array_heap_t *h, FILE *f);

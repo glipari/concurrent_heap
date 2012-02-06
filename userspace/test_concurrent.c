@@ -126,19 +126,41 @@ void *checker(void *arg)
 {
     int flag;
     int count = 0;
+    data_struct_t* pdata_type = (data_struct_t*) arg;
+
     while(1) {
-        flag = heap_check(&heap);
-        if (!flag) {
-            // lock has not been released!
-            printf("Errore!!!\n");
-            FILE *myfile = fopen("error_heap.txt", "w");
-            heap_save(&heap, myfile);
-            fclose(myfile);
-            exit(-1);
+	    switch (*pdata_type) {
+		    case HEAP:
+        		flag = heap_check(&heap);
+        		if (!flag) {
+            			// lock has not been released!
+            			printf("Errore!!!\n");
+            			FILE *myfile = fopen("error_heap.txt", "w");
+            			heap_save(&heap, myfile);
+            			fclose(myfile);
+            			exit(-1);
+			}
+			break;
+		    case ARRAY_HEAP:
+        		flag = array_heap_check(&array_heap);
+        		if (!flag) {
+            			// lock has not been released!
+            			printf("Errore!!!\n");
+            			FILE *myfile =
+					fopen("error_array_heap.txt", "w");
+            			array_heap_save(&array_heap, myfile);
+            			fclose(myfile);
+            			exit(-1);
+			}
+			break;
+		    case SKIPLIST:
+			printf("skiplist checker..\n");
+			break;
+		    default:
+			exit(-1);
         }
-        else 
-            // lock released
-            printf("%d) Checker: OK!\r", count++);
+        // lock released
+        printf("%d) Checker: OK!\r", count++);
         usleep(10);
     }
 }
@@ -197,7 +219,7 @@ int main(int argc, char **argv)
     
     printf("Creating Checker\n");
 
-    pthread_create(&check, 0, checker, 0);
+    pthread_create(&check, 0, checker, &data_type);
 
     //sleep(20);
 
