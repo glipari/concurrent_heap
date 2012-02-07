@@ -15,9 +15,14 @@
     :path ""
     :source '("heap.c" "test_concurrent.c")
     :auxsource '("heap.h")
-    :configuration-variables '(("debug" ("LDFLAGS" . "-pthread")))
+    :configuration-variables '(("default" ("LDFLAGS" . "-pthread")))
     :ldlibs '("pthreads")
     )
+   (ede-proj-target-makefile-program "lockfree_test"
+    :name "lockfree_test"
+    :path ""
+    :source '("lockfree_test.cpp")
+    :configuration-variables '(("default" ("CPPFLAGS" . "-std=c++0x")))
+    )
    )
-  :configuration-variables '(("debug" ("CFLAGS" . "-g")))
   )

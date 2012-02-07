@@ -5,7 +5,7 @@
 # EDE is the Emacs Development Environment.
 # http://cedet.sourceforge.net/ede.shtml
 #
-CFLAGS=-g -Wall
+CFLAGS=-g
 
 top="$(CURDIR)"/
 ede_FILES=Project.ede Makefile
@@ -16,16 +16,23 @@ CC=gcc
 C_COMPILE=$(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 C_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
 C_LINK=$(CC) $(CFLAGS) $(LDFLAGS) -L.
-test_concurrent_SOURCES=array_heap.c heap.c test_concurrent.c
+test_concurrent_SOURCES=heap.c test_concurrent.c
 LDFLAGS=-pthread
-test_concurrent_OBJ= array_heap.o heap.o test_concurrent.o
+test_concurrent_OBJ= heap.o test_concurrent.o
+lockfree_test_SOURCES=lockfree_test.cpp
+CPPFLAGS=-std=c++0x
+lockfree_test_OBJ= lockfree_test.o
+CXX= g++
+CXX_COMPILE=$(CXX) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
+CXX_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
+CXX_LINK=$(CXX) $(CFLAGS) $(LDFLAGS) -L.
 VERSION=1.0
 DISTDIR=$(top)fine_grain_lock-$(VERSION)
 top_builddir = 
 
-DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P
+DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P .deps/lockfree_test.P
 
-all: main test_concurrent
+all: main test_concurrent lockfree_test
 
 DEPS_MAGIC := $(shell mkdir .deps > /dev/null 2>&1 || :)
 -include $(DEP_FILES)
@@ -40,6 +47,13 @@ main: $(main_OBJ)
 test_concurrent: $(test_concurrent_OBJ)
 	$(C_LINK) -o $@ $^
 
+%.o: %.cpp
+	@echo '$(CXX_COMPILE) -c $<'; \
+	$(CXX_COMPILE) $(CXX_DEPENDENCIES) -o $@ -c $<
+
+lockfree_test: $(lockfree_test_OBJ)
+	$(CXX_LINK) -o $@ $^
+
 tags: 
 
 
@@ -51,7 +65,7 @@ clean:
 dist:
 	rm -rf $(DISTDIR)
 	mkdir $(DISTDIR)
-	cp $(main_SOURCES) $(test_concurrent_SOURCES) $(ede_FILES) $(DISTDIR)
+	cp $(main_SOURCES) $(test_concurrent_SOURCES) $(lockfree_test_SOURCES) $(ede_FILES) $(DISTDIR)
 	tar -cvzf $(DISTDIR).tar.gz $(DISTDIR)
 	rm -rf $(DISTDIR)
 
