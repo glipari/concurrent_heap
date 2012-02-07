@@ -143,11 +143,15 @@ int heap_preempt(void *s, int proc, __u64 dl)
 #define STACKSIZE  10   /* needs to be > log_2(nproc) */
 #define STACKBASE  0   
 
-int heap_finish(heap_t *h, int proc, dline_t deadline)
+int heap_finish(void *s, int proc, __u64 dline)
 {
     int path[STACKSIZE];                     
     int top = STACKBASE, base = STACKBASE;              
+    heap_t *h = (heap_t*) s;
     node_t *p_proc = &h->nodes[proc];
+    dline_t deadline;
+    deadline.value = dline;
+    deadline.special = DL_NORMAL;
 
     int j = 0, k = 0;             /* node indexes       */
     int i;                        /* path index         */
@@ -304,7 +308,8 @@ void heap_load(void *s, FILE *f)
 const struct data_struct_ops heap_ops = {
 	.data_init = heap_init,
 	.data_cleanup = heap_delete,
-	.data_set = heap_preempt,
+	.data_preempt = heap_preempt,
+	.data_finish = heap_finish,
 	//.data_find = array_heap_find,
 	//.data_max = heap_maximum,
 	.data_load = heap_load,

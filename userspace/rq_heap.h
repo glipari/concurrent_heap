@@ -190,7 +190,7 @@ static inline void __rq_heap_union(rq_heap_prio_t higher_prio, struct rq_heap* h
 		heap->head = h2;
 		return;
 	}
-	h1 = __heap_merge(h1, h2);
+	h1 = __rq_heap_merge(h1, h2);
 	prev = NULL;
 	x    = h1;
 	next = x->next;

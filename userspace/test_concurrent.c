@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <signal.h>
 #include <unistd.h>
+#include <time.h>
 #include "heap.h"
 #include "array_heap.h"
 #include "common_ops.h"
@@ -10,14 +11,14 @@
 
 //#define VERBOSE 
 
-#define NPROCESSORS    8    
-#define NCYCLES        1000000
+#define NPROCESSORS    8
+#define NCYCLES        1000 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
 #define WAITCYCLE      10000
 
 #ifdef VERBOSE
-#define PRINT_OP(i, op, dline) printf("%d) %s, dline %llu (%d)\n", i, op, dline.value, dline.special)
+#define PRINT_OP(i, op, dline) printf("%d) %s, dline %llu\n", i, op, dline)
 #else 
 #define PRINT_OP(i, op, dline) 
 #endif
@@ -31,8 +32,40 @@ extern struct data_struct_ops array_heap_ops;
 extern struct data_struct_ops heap_ops;
 
 typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2} data_struct_t;
-typedef enum {ARRIVAL=0, FINISH=1, SLEEP=2} operation_t;
-double prob[3] = {.1, .2, 1}; // 10% probability of new arrival, 10% of finishing the job, 80% of sleeping for 1 usec
+typedef enum {ARRIVAL=0, NOTHING=1} operation_t;
+double prob[2] = {.2, 1}; // 20% probability of new arrival, 80% of doing nothing
+
+static inline int __dl_time_before(__u64 a, __u64 b)
+{
+        return (__s64)(a - b) < 0;
+}
+
+struct timespec
+usec_to_timespec(unsigned long usec)
+{
+	struct timespec ts;
+
+	ts.tv_sec = usec / 1000000;
+	ts.tv_nsec = (usec % 1000000) * 1000;
+
+	return ts;
+}
+
+struct timespec
+timespec_add(struct timespec *t1, struct timespec *t2)
+{
+	struct timespec ts;
+
+	ts.tv_sec = t1->tv_sec + t2->tv_sec;
+	ts.tv_nsec = t1->tv_nsec + t2->tv_nsec;
+
+	while (ts.tv_nsec >= 1E9) {
+		ts.tv_nsec -= 1E9;
+		ts.tv_sec++;
+	}
+
+	return ts;
+}
 
 static int task_compare(struct rq_heap_node* _a, struct rq_heap_node* _b)
 {
@@ -40,7 +73,7 @@ static int task_compare(struct rq_heap_node* _a, struct rq_heap_node* _b)
 	a = (struct task_struct*) rq_heap_node_value(_a);
 	b = (struct task_struct*) rq_heap_node_value(_b);
 
-	return dl_time_before(a->deadline, b->deadline);
+	return __dl_time_before(a->deadline, b->deadline);
 }
 
 static void add_task(struct rq_heap* heap, struct task_struct* task)
@@ -52,19 +85,19 @@ static void add_task(struct rq_heap* heap, struct task_struct* task)
 
 operation_t select_operation()
 {
-    operation_t i = 0;
-    double p = ((double)rand()) / (double)INT_MAX;
-    for (i=ARRIVAL; i<SLEEP+1; i++) {
-        if (p<prob[i]) return i;
-    }
-    return SLEEP;
+	operation_t i = 0;
+	double p = ((double)rand()) / (double)INT_MAX;
+	for (i = ARRIVAL; i < NOTHING + 1; i++) {
+		if (p < prob[i]) return i;
+	}
+	
+	return NOTHING;
 }
 
-dline_t arrival_process(dline_t curr_clock)
+__u64 arrival_process(__u64 curr_clock)
 {
-    dline_t tmp = curr_clock;
-    tmp.special = DL_NORMAL;
-    tmp.value +=  (rand() % (DMAX - DMIN)) + DMIN;
+    __u64 tmp = curr_clock;
+    tmp +=  (rand() % (DMAX - DMIN)) + DMIN;
 
     return tmp;
 }
@@ -84,67 +117,74 @@ void signal_handler(int sig)
 
 void *processor(void *arg)
 {
-    int index = *((int*)arg);
-    int i;
-    struct rq_heap rq;
+	int index = *((int*)arg);
+	int i, last_pid = 0;
+	struct rq_heap rq;
+	struct rq_heap_node *min;
+	struct task_struct *min_tsk, *new_tsk;
+	operation_t op;
+	struct timespec t_sleep, t_period;
 
-    rq_heap_init(&rq);
+	rq_heap_init(&rq);
+	printf("[%d]: rq initialized\n", index);
 
-    __u64 curr_deadline = 0;
-    __u64 curr_clock = 0;
-    
-    for (i = 0; i < NCYCLES; i++) {
-        operation_t op = select_operation();
-        switch(op) {
-        case ARRIVAL:
-        {
-            dline_t dline = arrival_process(curr_clock);
-            PRINT_OP(index, "arrival", dline);
-            int res;
-            int proc = -1;
-            do {
-                res = 1;
-                node_t *pn = heap_get_max_node(&heap);
-                dline_t latest = pn->deadline;
-                proc = pn->proc_index;
-                if (dl_time_before(dline, latest))  
-                    res = dso->data_set(&heap, proc, dline.value);
-            } while (res == 0);
-            if (proc == index) {
-                curr_clock = curr_deadline;
-                curr_deadline = dline;
-            }
-            num_preemptions[index] += res; 
-            break;
-        }
-        case FINISH:
-        {
-            PRINT_OP(index, "finishing", curr_deadline);
-            curr_clock = PNODE_DLINE((&heap), index);
-            if (dl_time_before(curr_clock, DLINE_MAX)) {
-                curr_deadline = arrival_process(curr_clock);
-                if (heap_finish(&heap, index, curr_deadline)) 
-                    curr_clock = curr_deadline;
-                else 
-                    curr_deadline = heap_get_max_node(&heap)->deadline;
-                num_finish[index]++;
-            }
-            
-            break;
-        }
-        case SLEEP:
-        {
-            unsigned long k;
-            unsigned long delay = rand() % WAITCYCLE;
-            for (k=0;k < delay;k++);  
-            break;
-        }
-        default: 
-            printf("???? Operation unkown");
-            exit(-1);
-        }
-    }
-    return 0;
+	__u64 curr_deadline = 0, min_dl = 0, new_dl;
+	__u64 curr_clock = 0;
+	t_period = usec_to_timespec(1000);
+
+	clock_gettime(CLOCK_MONOTONIC, &t_sleep);
+	for (i = 0; i < NCYCLES; i++) {
+		curr_clock++;
+
+		min = rq_heap_peek(task_compare, &rq);
+		if (min != NULL) {
+			min_tsk = (struct task_struct*) rq_heap_node_value(min);
+			min_dl = min_tsk->deadline;
+		}
+
+		//printf("[%d]: curr_clock = %llu, min_dl = %llu\n",
+		//		index, curr_clock, min_dl);
+
+		if (__dl_time_before(min_dl, curr_clock) && min != NULL) {
+			/*
+			 * remove task from rq
+			 * task finish
+			 */
+			//printf("[%d]: task finishes\n", index);
+			rq_heap_take(task_compare, &rq);
+
+			min = rq_heap_peek(task_compare, &rq);
+			min_tsk = (struct task_struct*) rq_heap_node_value(min);
+			curr_deadline = min_tsk->deadline;
+			dso->data_finish(data_struct, index, curr_deadline);
+
+			num_finish[index]++;
+		}
+
+		op = select_operation();
+
+		if (op == ARRIVAL) {
+			new_dl = arrival_process(curr_clock);
+			PRINT_OP(index, "arrival", dline);
+			new_tsk = malloc(sizeof(struct task_struct));
+			new_tsk->deadline = new_dl;
+			new_tsk->pid = last_pid++;
+			//printf("[%d]: task arrival (%d, %llu)\n", index,
+			//		new_tsk->pid, new_tsk->deadline);
+
+			add_task(&rq, new_tsk);
+			if (__dl_time_before(new_dl, curr_deadline)) {
+				dso->data_preempt(data_struct, index, new_dl);
+				num_preemptions[index]++;
+				curr_deadline = new_dl;
+			}
+		}
+
+		t_sleep = timespec_add(&t_sleep, &t_period);
+		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &t_sleep, NULL);
+	}
+
+	return 0;
 }
 
 void *checker(void *arg)

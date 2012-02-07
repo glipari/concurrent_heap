@@ -10,8 +10,14 @@ struct data_struct_ops {
 
 	/*
 	 * Update CPU state inside the data structure
+	 * after a preemption
 	 */
-	int (*data_set) (void *s, int cpu, __u64 dline);
+	int (*data_preempt) (void *s, int cpu, __u64 dline);
+	/*
+	 * Update CPU state inside the data structure
+	 * after a task finished 
+	 */
+	int (*data_finish) (void *s, int cpu, __u64 dline);
 	/*
 	 * data_find should find the best CPU where to push
 	 * a task and/or find the best task to pull from

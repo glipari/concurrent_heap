@@ -25,7 +25,7 @@ top_builddir =
 
 DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P
 
-all: main test_concurrent
+all: test_concurrent
 
 DEPS_MAGIC := $(shell mkdir .deps > /dev/null 2>&1 || :)
 -include $(DEP_FILES)
@@ -38,7 +38,7 @@ main: $(main_OBJ)
 	$(C_LINK) -o $@ $^
 
 test_concurrent: $(test_concurrent_OBJ)
-	$(C_LINK) -o $@ $^
+	$(C_LINK) -o $@ $^ -lrt
 
 tags: 
 

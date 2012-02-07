@@ -57,7 +57,7 @@ void heap_delete(void *s);
 #define heap_get_max_node(h) ((h)->array[0].node)
 
 int heap_preempt(void *s, int proc, __u64 newdline);
-int heap_finish(heap_t *h, int proc, dline_t deadline);
+int heap_finish(void *s, int proc, __u64 deadline);
 void heap_print(void *s);
 int heap_check(void *s);
 
