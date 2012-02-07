@@ -27,4 +27,8 @@ struct data_struct_ops {
 	int (*data_check) (void *s);
 };
 
+struct task_struct {
+	int pid;
+	__u64 deadline;
+};
 #endif /*__COMMON_OPS__ */

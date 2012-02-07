@@ -6,6 +6,7 @@
 #include "heap.h"
 #include "array_heap.h"
 #include "common_ops.h"
+#include "rq_heap.h"
 
 //#define VERBOSE 
 
@@ -32,6 +33,22 @@ extern struct data_struct_ops heap_ops;
 typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2} data_struct_t;
 typedef enum {ARRIVAL=0, FINISH=1, SLEEP=2} operation_t;
 double prob[3] = {.1, .2, 1}; // 10% probability of new arrival, 10% of finishing the job, 80% of sleeping for 1 usec
+
+static int task_compare(struct rq_heap_node* _a, struct rq_heap_node* _b)
+{
+	struct task_struct *a, *b;
+	a = (struct task_struct*) rq_heap_node_value(_a);
+	b = (struct task_struct*) rq_heap_node_value(_b);
+
+	return dl_time_before(a->deadline, b->deadline);
+}
+
+static void add_task(struct rq_heap* heap, struct task_struct* task)
+{
+	struct rq_heap_node* hn = malloc(sizeof(struct rq_heap_node));
+	rq_heap_node_init(hn, task);
+	rq_heap_insert(task_compare, heap, hn);
+}
 
 operation_t select_operation()
 {
@@ -69,11 +86,14 @@ void *processor(void *arg)
 {
     int index = *((int*)arg);
     int i;
+    struct rq_heap rq;
 
-    dline_t curr_deadline = DLINE_MIN;
-    dline_t curr_clock = DLINE_MIN;
+    rq_heap_init(&rq);
+
+    __u64 curr_deadline = 0;
+    __u64 curr_clock = 0;
     
-    for (i=0; i<NCYCLES; i++) {
+    for (i = 0; i < NCYCLES; i++) {
         operation_t op = select_operation();
         switch(op) {
         case ARRIVAL:
