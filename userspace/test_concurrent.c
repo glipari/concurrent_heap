@@ -11,8 +11,8 @@
 
 //#define VERBOSE 
 
-#define NPROCESSORS    8
-#define NCYCLES        1000 /* 1 cycle = 1ms simulated time */
+#define NPROCESSORS    1
+#define NCYCLES        100 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
 #define WAITCYCLE      10000
@@ -126,9 +126,11 @@ void *processor(void *arg)
 	struct timespec t_sleep, t_period;
 
 	rq_heap_init(&rq);
+#ifdef DEBUG
 	printf("[%d]: rq initialized\n", index);
+#endif
 
-	__u64 curr_deadline = 0, min_dl = 0, new_dl;
+	__u64 min_dl = 0, new_dl;
 	__u64 curr_clock = 0;
 	t_period = usec_to_timespec(1000);
 
@@ -142,21 +144,25 @@ void *processor(void *arg)
 			min_dl = min_tsk->deadline;
 		}
 
-		//printf("[%d]: curr_clock = %llu, min_dl = %llu\n",
-		//		index, curr_clock, min_dl);
+#ifdef DEBUG
+		printf("[%d]: curr_clock = %llu, min_dl = %llu\n",
+			index, curr_clock, min_dl);
+#endif
 
 		if (__dl_time_before(min_dl, curr_clock) && min != NULL) {
 			/*
 			 * remove task from rq
 			 * task finish
 			 */
-			//printf("[%d]: task finishes\n", index);
+#ifdef DEBUG
+			printf("[%d]: task finishes\n", index);
+#endif
 			rq_heap_take(task_compare, &rq);
 
 			min = rq_heap_peek(task_compare, &rq);
 			min_tsk = (struct task_struct*) rq_heap_node_value(min);
-			curr_deadline = min_tsk->deadline;
-			dso->data_finish(data_struct, index, curr_deadline);
+			min_dl = min_tsk->deadline;
+			dso->data_finish(data_struct, index, min_dl);
 
 			num_finish[index]++;
 		}
@@ -169,14 +175,18 @@ void *processor(void *arg)
 			new_tsk = malloc(sizeof(struct task_struct));
 			new_tsk->deadline = new_dl;
 			new_tsk->pid = last_pid++;
-			//printf("[%d]: task arrival (%d, %llu)\n", index,
-			//		new_tsk->pid, new_tsk->deadline);
+#ifdef DEBUG
+			printf("[%d]: task arrival (%d, %llu)\n", index,
+					new_tsk->pid, new_tsk->deadline);
+#endif
 
 			add_task(&rq, new_tsk);
-			if (__dl_time_before(new_dl, curr_deadline)) {
+			if (__dl_time_before(new_dl, min_dl)) {
+#ifdef DEBUG
+				printf("[%d]: preemption!\n", index);
+#endif
 				dso->data_preempt(data_struct, index, new_dl);
 				num_preemptions[index]++;
-				curr_deadline = new_dl;
 			}
 		}
 
@@ -203,7 +213,7 @@ void *checker(void *arg)
 		exit(-1);
 	} else {
         	// lock released
-        	printf("%d) Checker: OK!\r", count++);
+        	//printf("%d) Checker: OK!\r", count++);
         	usleep(10);
 	}
     }
@@ -253,6 +263,11 @@ int main(int argc, char **argv)
     int i;
 
     signal(SIGINT, signal_handler);
+#ifdef DEBUG
+    srand(1);
+#else
+    srand(time(NULL));
+#endif
 
 
     data_type = parse_user_options(argc, argv);
