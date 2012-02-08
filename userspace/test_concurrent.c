@@ -11,8 +11,8 @@
 
 //#define VERBOSE 
 
-#define NPROCESSORS    4
-#define NCYCLES        100 /* 1 cycle = 1ms simulated time */
+#define NPROCESSORS    8
+#define NCYCLES        10000 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
 #define WAITCYCLE      10000
