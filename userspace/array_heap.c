@@ -236,7 +236,7 @@ const struct data_struct_ops array_heap_ops = {
 	.data_init = array_heap_init,
 	.data_cleanup = array_heap_cleanup,
 	.data_preempt = heap_insert,
-	.data_finish = heap_insert,
+	//.data_finish = heap_insert,
 	.data_find = array_heap_find,
 	.data_max = heap_maximum,
 };

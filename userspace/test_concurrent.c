@@ -11,7 +11,7 @@
 
 //#define VERBOSE 
 
-#define NPROCESSORS    1
+#define NPROCESSORS    4
 #define NCYCLES        100 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
@@ -102,6 +102,7 @@ __u64 arrival_process(__u64 curr_clock)
     return tmp;
 }
 
+int num_arrivals[NPROCESSORS];
 int num_preemptions[NPROCESSORS];
 int num_finish[NPROCESSORS];
 
@@ -123,6 +124,7 @@ void *processor(void *arg)
 	struct rq_heap_node *min;
 	struct task_struct *min_tsk, *new_tsk;
 	operation_t op;
+	dline_t deadline;
 	struct timespec t_sleep, t_period;
 
 	rq_heap_init(&rq);
@@ -154,15 +156,21 @@ void *processor(void *arg)
 			 * remove task from rq
 			 * task finish
 			 */
+			rq_heap_take(task_compare, &rq);
+
+			deadline.value = 0;
+			deadline.special = DL_MAX;
+			min = rq_heap_peek(task_compare, &rq);
+			if (min != NULL) {
+				min_tsk = (struct task_struct*) rq_heap_node_value(min);
+				min_dl = min_tsk->deadline;
+				deadline.value = min_dl;
+				deadline.special = DL_NORMAL;
+			}
+			dso->data_finish(data_struct, index, deadline);
 #ifdef DEBUG
 			printf("[%d]: task finishes\n", index);
 #endif
-			rq_heap_take(task_compare, &rq);
-
-			min = rq_heap_peek(task_compare, &rq);
-			min_tsk = (struct task_struct*) rq_heap_node_value(min);
-			min_dl = min_tsk->deadline;
-			dso->data_finish(data_struct, index, min_dl);
 
 			num_finish[index]++;
 		}
@@ -170,6 +178,7 @@ void *processor(void *arg)
 		op = select_operation();
 
 		if (op == ARRIVAL) {
+			num_arrivals[index]++;
 			new_dl = arrival_process(curr_clock);
 			PRINT_OP(index, "arrival", dline);
 			new_tsk = malloc(sizeof(struct task_struct));
@@ -182,14 +191,22 @@ void *processor(void *arg)
 
 			add_task(&rq, new_tsk);
 			if (__dl_time_before(new_dl, min_dl)) {
+				dso->data_preempt(data_struct, index, new_dl);
 #ifdef DEBUG
 				printf("[%d]: preemption!\n", index);
 #endif
-				dso->data_preempt(data_struct, index, new_dl);
 				num_preemptions[index]++;
+			} else if (min_dl == 0) {
+				dso->data_preempt(data_struct, index, new_dl);
+#ifdef DEBUG
+				printf("[%d]: no more empty\n", index);
+#endif
 			}
 		}
 
+#ifdef DEBUG
+		dso->data_print(data_struct);
+#endif
 		t_sleep = timespec_add(&t_sleep, &t_period);
 		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &t_sleep, NULL);
 	}
@@ -213,7 +230,9 @@ void *checker(void *arg)
 		exit(-1);
 	} else {
         	// lock released
-        	//printf("%d) Checker: OK!\r", count++);
+#ifndef DEBUG
+        	printf("%d) Checker: OK!\r", count++);
+#endif
         	usleep(10);
 	}
     }
@@ -304,6 +323,7 @@ int main(int argc, char **argv)
 
     for (i=0; i<NPROCESSORS; i++) {
         pthread_join(threads[i], 0);
+        printf("Num Arrivals [%d]: %d\n", i, num_arrivals[i]);
         printf("Num Preemptions [%d]: %d\n", i, num_preemptions[i]);
         printf("Num Finishings  [%d]: %d\n", i, num_finish[i]);
     }
