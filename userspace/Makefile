@@ -5,7 +5,7 @@
 # EDE is the Emacs Development Environment.
 # http://cedet.sourceforge.net/ede.shtml
 #
-CFLAGS=-g
+CFLAGS=-g -Wall -DDEBUG
 
 top="$(CURDIR)"/
 ede_FILES=Project.ede Makefile
@@ -16,9 +16,9 @@ CC=gcc
 C_COMPILE=$(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 C_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
 C_LINK=$(CC) $(CFLAGS) $(LDFLAGS) -L.
-test_concurrent_SOURCES=heap.c test_concurrent.c
+test_concurrent_SOURCES=array_heap.c heap.c test_concurrent.c
 LDFLAGS=-pthread
-test_concurrent_OBJ= heap.o test_concurrent.o
+test_concurrent_OBJ= array_heap.o heap.o test_concurrent.o
 lockfree_test_SOURCES=lockfree_test.cpp
 CPPFLAGS=-std=c++0x
 lockfree_test_OBJ= lockfree_test.o
@@ -32,7 +32,7 @@ top_builddir =
 
 DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P .deps/lockfree_test.P
 
-all: main test_concurrent lockfree_test
+all: test_concurrent lockfree_test
 
 DEPS_MAGIC := $(shell mkdir .deps > /dev/null 2>&1 || :)
 -include $(DEP_FILES)
@@ -45,7 +45,7 @@ main: $(main_OBJ)
 	$(C_LINK) -o $@ $^
 
 test_concurrent: $(test_concurrent_OBJ)
-	$(C_LINK) -o $@ $^
+	$(C_LINK) -o $@ $^ -lrt
 
 %.o: %.cpp
 	@echo '$(CXX_COMPILE) -c $<'; \

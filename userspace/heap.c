@@ -137,16 +137,64 @@ int heap_preempt(void *s, int proc, __u64 dl)
     return 1;
 }
 
+int heap_preempt_local(void *s, int proc, __u64 dl)
+{
+    heap_t *h = (heap_t*) s;
+    dline_t newdline;
+    newdline.value = dl;
+    newdline.special = DL_NORMAL;
+    int proc_pos = h->nodes[proc].position;
+    LOCK(h, proc_pos);
+    /* check if still the same */
+    if (proc != h->array[proc_pos].node->proc_index) {
+        UNLOCK(h, proc_pos);
+        return 0;
+    }
+    /* still the same, do the update */
+    h->array[proc_pos].node->deadline = newdline;
+    int n = proc_pos;
+    int l = heap_left(n);
+    int r = heap_right(n);
+    /* see if we must go down */
+    while (n < h->nproc) {
+        LOCK(h, l);
+        LOCK(h, r);
+        int p = max_dline_proc(h,n,l,r);
+        if (p == n) {
+            UNLOCK(h, r);
+            UNLOCK(h, l);
+            UNLOCK(h, n);
+            return 1;
+        }
+        else if (p == r) UNLOCK(h, l);
+        else             UNLOCK(h, r);
+
+        /* p and n are still locked    */
+        /* now p and n must be swapped */
+        heap_swap_nodes(h, n, p);
+
+        UNLOCK(h, n);   /* p is still locked */
+
+        n = p;
+        l = heap_left(n);
+        r = heap_right(n);
+    }
+    printf("SHOULD NEVER GO OUT FROM HERE!\n");
+    exit(-1);
+    UNLOCK(h, n);
+    return 1;
+}
 
 // the path is on the stack: now I should lock from top until proc
 // the problem is that proc could move up in the meanwhile!
 #define STACKSIZE  10   /* needs to be > log_2(nproc) */
 #define STACKBASE  0   
 
-int heap_finish(heap_t *h, int proc, dline_t deadline)
+int heap_finish(void *s, int proc, dline_t deadline)
 {
     int path[STACKSIZE];                     
     int top = STACKBASE, base = STACKBASE;              
+    heap_t *h = (heap_t*) s;
     node_t *p_proc = &h->nodes[proc];
 
     int j = 0, k = 0;             /* node indexes       */
@@ -304,7 +352,8 @@ void heap_load(void *s, FILE *f)
 const struct data_struct_ops heap_ops = {
 	.data_init = heap_init,
 	.data_cleanup = heap_delete,
-	.data_set = heap_preempt,
+	.data_preempt = heap_preempt_local,
+	.data_finish = heap_finish,
 	//.data_find = array_heap_find,
 	//.data_max = heap_maximum,
 	.data_load = heap_load,

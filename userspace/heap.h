@@ -5,16 +5,10 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <linux/types.h>
+#include "common_ops.h"
 
 typedef unsigned long long u64;
 typedef long long s64;
-
-typedef enum{DL_MIN, DL_NORMAL, DL_MAX} dl_t;
-
-typedef struct __dline_struct {
-    u64 value;
-    dl_t special;
-} dline_t;
 
 int dl_time_before(dline_t a, dline_t b);
 
@@ -57,7 +51,8 @@ void heap_delete(void *s);
 #define heap_get_max_node(h) ((h)->array[0].node)
 
 int heap_preempt(void *s, int proc, __u64 newdline);
-int heap_finish(heap_t *h, int proc, dline_t deadline);
+int heap_preempt_local(void *s, int proc, __u64 newdline);
+int heap_finish(void *s, int proc, dline_t deadline);
 void heap_print(void *s);
 int heap_check(void *s);
 
