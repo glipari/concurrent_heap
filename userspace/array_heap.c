@@ -124,8 +124,10 @@ int heap_change_key(array_heap_t *h, int idx, long new_dl) {
 /* Inserts a new key in the heap.
  * Returns the position where the new element has been added.
  */
-int heap_insert(void *s, int cpu, __u64 dl) {
+int heap_insert(void *s, int cpu, dline_t dline) {
 	int idx, old_idx;
+	__u64 dl = dline.value;
+	dl_t dl_type = dline.special;
 	array_heap_t *h = (array_heap_t*) s;
 
 	/*
@@ -135,7 +137,7 @@ int heap_insert(void *s, int cpu, __u64 dl) {
 	 */
 
 	pthread_spin_lock(&h->lock);
-	if (dl == DL_INVALID) {
+	if (dl_type == DL_MAX) {
 		/*h->elements[old_idx].dl = dl;*/
 		/*h->cpu_to_idx[cpu] = IDX_INVALID;*/
 		/*h->size--;*/

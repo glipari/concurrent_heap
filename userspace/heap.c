@@ -90,12 +90,9 @@ void heap_delete(void *s)
     free(h->array);
 }
 
-int heap_preempt(void *s, int proc, __u64 dl)
+int heap_preempt(void *s, int proc, dline_t newdline)
 {
     heap_t *h = (heap_t*) s;
-    dline_t newdline;
-    newdline.value = dl;
-    newdline.special = DL_NORMAL;
     LOCK(h, 0);
     /* check if still the same */
     if (proc != h->array[0].node->proc_index) {
@@ -137,12 +134,9 @@ int heap_preempt(void *s, int proc, __u64 dl)
     return 1;
 }
 
-int heap_preempt_local(void *s, int proc, __u64 dl)
+int heap_preempt_local(void *s, int proc, dline_t newdline)
 {
     heap_t *h = (heap_t*) s;
-    dline_t newdline;
-    newdline.value = dl;
-    newdline.special = DL_NORMAL;
     int proc_pos = h->nodes[proc].position;
     LOCK(h, proc_pos);
     /* check if still the same */

@@ -19,7 +19,7 @@ struct data_struct_ops {
 	 * Update CPU state inside the data structure
 	 * after a preemption
 	 */
-	int (*data_preempt) (void *s, int cpu, __u64 dline);
+	int (*data_preempt) (void *s, int cpu, dline_t dline);
 	/*
 	 * Update CPU state inside the data structure
 	 * after a task finished 

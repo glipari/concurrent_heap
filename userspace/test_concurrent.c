@@ -191,13 +191,17 @@ void *processor(void *arg)
 
 			add_task(&rq, new_tsk);
 			if (__dl_time_before(new_dl, min_dl)) {
-				dso->data_preempt(data_struct, index, new_dl);
+				deadline.value = new_dl;
+				deadline.special = DL_NORMAL;
+				dso->data_preempt(data_struct, index, deadline);
 #ifdef DEBUG
 				printf("[%d]: preemption!\n", index);
 #endif
 				num_preemptions[index]++;
 			} else if (min_dl == 0) {
-				dso->data_preempt(data_struct, index, new_dl);
+				deadline.value = new_dl;
+				deadline.special = DL_NORMAL;
+				dso->data_preempt(data_struct, index, deadline);
 #ifdef DEBUG
 				printf("[%d]: no more empty\n", index);
 #endif

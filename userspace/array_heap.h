@@ -4,6 +4,7 @@
  */
 #include <pthread.h>
 #include <linux/types.h>
+#include "common_ops.h"
 
 #define DL_INVALID	-1
 #define IDX_INVALID	-1
@@ -29,7 +30,7 @@ void print_array_heap(array_heap_t *h, int nproc);
 
 void max_heapify(array_heap_t *h, int idx, int *new_idx);
 
-int heap_insert(void *s, int cpu, __u64 dl);
+int heap_insert(void *s, int cpu, dline_t dl);
 
 int heap_maximum(void *s);
 
