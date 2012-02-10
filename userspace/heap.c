@@ -33,18 +33,18 @@
 dline_t DLINE_MAX = {0, DL_MAX};
 dline_t DLINE_MIN = {0, DL_MIN};
 
-
-int dl_time_before(dline_t a, dline_t b) {
-    if (a.special == DL_MIN) {
-        if (b.special == DL_MIN) return 0;
-        else return 1;
-    }
-    else if (a.special == DL_MAX) return 0;
-    else {
-        if (b.special == DL_MIN) return 0;
-        else if (b.special == DL_MAX) return 1;
-        else return ((s64)(a.value - b.value) < 0);
-    }
+int dl_time_before(dline_t a, dline_t b)
+{
+	if (a.special == DL_MIN) {
+		if (b.special == DL_MIN) return 0;
+		else return 1;
+	} else if (a.special == DL_MAX) {
+		return 0;
+	} else {
+		if (b.special == DL_MIN) return 0;
+		else if (b.special == DL_MAX) return 1;
+		else return ((s64)(a.value - b.value) < 0);
+	}
 }
 
 void heap_swap_nodes(heap_t *h, int n, int p)
@@ -90,9 +90,12 @@ void heap_delete(void *s)
     free(h->array);
 }
 
-int heap_preempt(void *s, int proc, dline_t newdline)
+int heap_preempt(void *s, int proc, __u64 newdl, int is_valid)
 {
     heap_t *h = (heap_t*) s;
+    dline_t newdline;
+    newdline.value = newdl;
+    newdline.special = DL_NORMAL;
     LOCK(h, 0);
     /* check if still the same */
     if (proc != h->array[0].node->proc_index) {
@@ -134,9 +137,12 @@ int heap_preempt(void *s, int proc, dline_t newdline)
     return 1;
 }
 
-int heap_preempt_local(void *s, int proc, dline_t newdline)
+int heap_preempt_local(void *s, int proc, __u64 newdl, int is_valid)
 {
     heap_t *h = (heap_t*) s;
+    dline_t newdline;
+    newdline.value = newdl;
+    newdline.special = DL_NORMAL;
     int proc_pos = h->nodes[proc].position;
     LOCK(h, proc_pos);
     /* check if still the same */
@@ -184,11 +190,19 @@ int heap_preempt_local(void *s, int proc, dline_t newdline)
 #define STACKSIZE  10   /* needs to be > log_2(nproc) */
 #define STACKBASE  0   
 
-int heap_finish(void *s, int proc, dline_t deadline)
+int heap_finish(void *s, int proc, __u64 dl, int is_valid)
 {
     int path[STACKSIZE];                     
     int top = STACKBASE, base = STACKBASE;              
     heap_t *h = (heap_t*) s;
+    dline_t deadline;
+    if (is_valid) {
+        deadline.value = dl;
+        deadline.special = DL_NORMAL;
+    } else {
+        deadline.value = 0;
+        deadline.special = DL_MAX;
+    }
     node_t *p_proc = &h->nodes[proc];
 
     int j = 0, k = 0;             /* node indexes       */
@@ -242,7 +256,7 @@ int heap_finish(void *s, int proc, dline_t deadline)
 }
 
 
-void heap_print(void *s)
+void heap_print(void *s, int nproc)
 {
     int i;
     heap_t *h = (heap_t*) s;
@@ -260,7 +274,7 @@ void heap_print(void *s)
 }
 
 
-int heap_check(void *s)
+int heap_check(void *s, int nproc)
 {
     /* check order */
     int i;

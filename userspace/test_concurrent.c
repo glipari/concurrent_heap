@@ -12,7 +12,7 @@
 //#define VERBOSE 
 
 #define NPROCESSORS    8
-#define NCYCLES        10000 /* 1 cycle = 1ms simulated time */
+#define NCYCLES        100000 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
 #define WAITCYCLE      10000
@@ -105,12 +105,13 @@ __u64 arrival_process(__u64 curr_clock)
 int num_arrivals[NPROCESSORS];
 int num_preemptions[NPROCESSORS];
 int num_finish[NPROCESSORS];
+int num_empty[NPROCESSORS];
 
 void signal_handler(int sig)
 {
     int i;
     printf("\nEXITING!\n");
-    heap_print(&heap);
+    dso->data_print(data_struct, NPROCESSORS);
     for (i=0; i<NPROCESSORS; i++) 
         printf("Index %d, ID %ld\n", i, (threads[i] % 100));
     exit(-1);
@@ -119,12 +120,11 @@ void signal_handler(int sig)
 void *processor(void *arg)
 {
 	int index = *((int*)arg);
-	int i, last_pid = 0;
+	int i, last_pid = 0, is_valid = 0;
 	struct rq_heap rq;
 	struct rq_heap_node *min;
 	struct task_struct *min_tsk, *new_tsk;
 	operation_t op;
-	dline_t deadline;
 	struct timespec t_sleep, t_period;
 
 	rq_heap_init(&rq);
@@ -158,20 +158,23 @@ void *processor(void *arg)
 			 */
 			rq_heap_take(task_compare, &rq);
 
-			deadline.value = 0;
-			deadline.special = DL_MAX;
+			min_dl = 0;
+			is_valid = 0;
 			min = rq_heap_peek(task_compare, &rq);
 			if (min != NULL) {
 				min_tsk = (struct task_struct*) rq_heap_node_value(min);
 				min_dl = min_tsk->deadline;
-				deadline.value = min_dl;
-				deadline.special = DL_NORMAL;
+				is_valid = 1;
 			}
-			dso->data_finish(data_struct, index, deadline);
+			dso->data_finish(data_struct, index, min_dl, is_valid);
 #ifdef DEBUG
 			printf("[%d]: task finishes\n", index);
+			if (!is_valid)
+				printf("[%d]: rq empty!\n", index);
 #endif
 
+			if (!is_valid)
+				num_empty[index]++;
 			num_finish[index]++;
 		}
 
@@ -191,17 +194,13 @@ void *processor(void *arg)
 
 			add_task(&rq, new_tsk);
 			if (__dl_time_before(new_dl, min_dl)) {
-				deadline.value = new_dl;
-				deadline.special = DL_NORMAL;
-				dso->data_preempt(data_struct, index, deadline);
+				dso->data_preempt(data_struct, index, new_dl, 1);
 #ifdef DEBUG
 				printf("[%d]: preemption!\n", index);
 #endif
 				num_preemptions[index]++;
 			} else if (min_dl == 0) {
-				deadline.value = new_dl;
-				deadline.special = DL_NORMAL;
-				dso->data_preempt(data_struct, index, deadline);
+				dso->data_preempt(data_struct, index, new_dl, 1);
 #ifdef DEBUG
 				printf("[%d]: no more empty\n", index);
 #endif
@@ -209,7 +208,7 @@ void *processor(void *arg)
 		}
 
 #ifdef DEBUG
-		dso->data_print(data_struct);
+		dso->data_print(data_struct, NPROCESSORS);
 #endif
 		t_sleep = timespec_add(&t_sleep, &t_period);
 		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &t_sleep, NULL);
@@ -224,7 +223,7 @@ void *checker(void *arg)
     int count = 0;
 
     while(1) {
-    	flag = dso->data_check(data_struct);
+    	flag = dso->data_check(data_struct, NPROCESSORS);
 	if (!flag) {
 		// lock has not been released!
 		printf("Errore!!!\n");
@@ -300,8 +299,8 @@ int main(int argc, char **argv)
     		printf("Initializing the heap\n");
 		break;
 	    case ARRAY_HEAP:
-    		printf("array_heap is not ready!\n");
-		exit(-1);
+    		printf("Initializing the array_heap\n");
+		break;
 	    case SKIPLIST:
 		printf("skiplist is not yet implemented!\n");
 		exit(-1);
@@ -329,7 +328,8 @@ int main(int argc, char **argv)
         pthread_join(threads[i], 0);
         printf("Num Arrivals [%d]: %d\n", i, num_arrivals[i]);
         printf("Num Preemptions [%d]: %d\n", i, num_preemptions[i]);
-        printf("Num Finishings  [%d]: %d\n", i, num_finish[i]);
+        printf("Num Finishings [%d]: %d\n", i, num_finish[i]);
+        printf("Num queue empty events  [%d]: %d\n", i, num_empty[i]);
     }
     printf("--------------EVERYTHING OK!---------------------\n");
     
