@@ -27,6 +27,7 @@ void *data_struct;
 heap_t heap;
 array_heap_t array_heap;
 pthread_t threads[NPROCESSORS];
+int last_pid = 0; /* operations on this MUST be ATOMIC */
 struct data_struct_ops *dso;
 extern struct data_struct_ops array_heap_ops;
 extern struct data_struct_ops heap_ops;
@@ -120,7 +121,7 @@ void signal_handler(int sig)
 void *processor(void *arg)
 {
 	int index = *((int*)arg);
-	int i, last_pid = 0, is_valid = 0;
+	int i, is_valid = 0;
 	struct rq_heap rq;
 	struct rq_heap_node *min;
 	struct task_struct *min_tsk, *new_tsk;
@@ -186,7 +187,7 @@ void *processor(void *arg)
 			PRINT_OP(index, "arrival", dline);
 			new_tsk = malloc(sizeof(struct task_struct));
 			new_tsk->deadline = new_dl;
-			new_tsk->pid = last_pid++;
+			new_tsk->pid = __sync_fetch_and_add( &last_pid, 1 );
 #ifdef DEBUG
 			printf("[%d]: task arrival (%d, %llu)\n", index,
 					new_tsk->pid, new_tsk->deadline);
