@@ -12,7 +12,7 @@
 //#define VERBOSE 
 
 #define NPROCESSORS    8
-#define NCYCLES        100000 /* 1 cycle = 1ms simulated time */
+#define NCYCLES        10000 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
 #define WAITCYCLE      10000
@@ -33,8 +33,13 @@ extern struct data_struct_ops array_heap_ops;
 extern struct data_struct_ops heap_ops;
 
 typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2} data_struct_t;
-typedef enum {ARRIVAL=0, NOTHING=1} operation_t;
-double prob[2] = {.2, 1}; // 20% probability of new arrival, 80% of doing nothing
+typedef enum {ARRIVAL=0, FINISH=1, NOTHING=2} operation_t;
+/*
+ * 20% probability of new arrival
+ * 10% of finish earlier that dline
+ * 70% of doing nothing
+ */
+double prob[3] = {.2, .3, 1};
 
 static inline int __dl_time_before(__u64 a, __u64 b)
 {
@@ -105,6 +110,7 @@ __u64 arrival_process(__u64 curr_clock)
 
 int num_arrivals[NPROCESSORS];
 int num_preemptions[NPROCESSORS];
+int num_early_finish[NPROCESSORS];
 int num_finish[NPROCESSORS];
 int num_empty[NPROCESSORS];
 
@@ -205,6 +211,42 @@ void *processor(void *arg)
 #ifdef DEBUG
 				printf("[%d]: no more empty\n", index);
 #endif
+			}
+		} else if (op == FINISH) {
+			min = rq_heap_peek(task_compare, &rq);
+			if (min != NULL) {
+				/*
+				 * if rq is not empty take the first
+				 * task
+				 */
+#ifdef DEBUG
+				printf("[%d]: task finishes early\n", index);
+#endif
+				num_early_finish[index]++;
+				rq_heap_take(task_compare, &rq);
+
+				/*
+				 * than see if the next task is to be scheduled
+				 * or else the rq becomes empty
+				 */
+				min_dl = 0;
+				is_valid = 0;
+				min = rq_heap_peek(task_compare, &rq);
+				if (min != NULL) {
+					min_tsk = (struct task_struct*) rq_heap_node_value(min);
+					min_dl = min_tsk->deadline;
+					is_valid = 1;
+				}
+				dso->data_finish(data_struct, index, min_dl, is_valid);
+
+#ifdef DEBUG
+				if (!is_valid)
+					printf("[%d]: rq empty!\n", index);
+#endif
+
+				if (!is_valid)
+					num_empty[index]++;
+				num_finish[index]++;
 			}
 		}
 
@@ -327,9 +369,11 @@ int main(int argc, char **argv)
 
     for (i=0; i<NPROCESSORS; i++) {
         pthread_join(threads[i], 0);
+	printf("+++++++++++++++++++++++++++++++++\n");
         printf("Num Arrivals [%d]: %d\n", i, num_arrivals[i]);
         printf("Num Preemptions [%d]: %d\n", i, num_preemptions[i]);
         printf("Num Finishings [%d]: %d\n", i, num_finish[i]);
+        printf("Num Early Finishings [%d]: %d\n", i, num_early_finish[i]);
         printf("Num queue empty events  [%d]: %d\n", i, num_empty[i]);
     }
     printf("--------------EVERYTHING OK!---------------------\n");

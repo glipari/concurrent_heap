@@ -5,7 +5,7 @@
 # EDE is the Emacs Development Environment.
 # http://cedet.sourceforge.net/ede.shtml
 #
-override CFLAGS+=-g
+CFLAGS = -g
 
 top="$(CURDIR)"/
 ede_FILES=Project.ede Makefile
@@ -33,6 +33,9 @@ top_builddir =
 DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P .deps/lockfree_test.P
 
 all: test_concurrent lockfree_test
+
+debug: CC += -DDEBUG
+debug: all
 
 DEPS_MAGIC := $(shell mkdir .deps > /dev/null 2>&1 || :)
 -include $(DEP_FILES)
