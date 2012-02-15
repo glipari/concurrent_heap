@@ -233,9 +233,8 @@ int array_heap_check(void *s, int nproc)
 		 */
 		if (h->cpu_to_idx[i] != IDX_INVALID &&
 			h->elements[h->cpu_to_idx[i]].cpu != i) {
-			printf("CPU %d is in position %d, but is registered at"
-				" position %d!\n", h->elements[i].cpu,
-				i, h->cpu_to_idx[h->elements[i].cpu]);
+			printf("CPU %d is wrongly registered at"
+				" position %d!\n", i, h->cpu_to_idx[i]);
 			flag = 0;
 			goto out;
 		}
@@ -243,7 +242,7 @@ int array_heap_check(void *s, int nproc)
 		/*
 		 * check if dline(i) > dline(left_child(i))
 		 */
-		if (left_child(i) < nproc && __dl_time_before(h->elements[i].dl,
+		if (left_child(i) < h->size && __dl_time_before(h->elements[i].dl,
 				h->elements[left_child(i)].dl) &&
 				h->cpu_to_idx[i] != IDX_INVALID) {
 			printf("Node %d has deadline %llu which is smaller"
@@ -257,7 +256,7 @@ int array_heap_check(void *s, int nproc)
 		/*
 		 * check if dline(i) > dline(right_child(i))
 		 */
-		if (right_child(i) < nproc && __dl_time_before(h->elements[i].dl,
+		if (right_child(i) < h->size && __dl_time_before(h->elements[i].dl,
 				h->elements[right_child(i)].dl) &&
 				h->cpu_to_idx[i] != IDX_INVALID) {
 			printf("Node %d has deadline %llu which is smaller"

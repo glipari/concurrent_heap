@@ -11,7 +11,7 @@
 
 //#define VERBOSE 
 
-#define NPROCESSORS    8
+#define NPROCESSORS    12
 #define NCYCLES        10000 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
