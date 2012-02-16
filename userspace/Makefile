@@ -10,15 +10,15 @@ CFLAGS = -g
 top="$(CURDIR)"/
 ede_FILES=Project.ede Makefile
 
-main_SOURCES=array_heap.h array_heap.c heap.h heap.c main.c
-main_OBJ= array_heap.o heap.o main.o
+main_SOURCES=array_heap.h array_heap.c heap.h heap.c dl_skiplist.c main.c
+main_OBJ= array_heap.o heap.o dl_skiplist.o main.o
 CC=gcc
 C_COMPILE=$(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 C_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
 C_LINK=$(CC) $(CFLAGS) $(LDFLAGS) -L.
-test_concurrent_SOURCES=array_heap.c heap.c test_concurrent.c
+test_concurrent_SOURCES=array_heap.c heap.c dl_skiplist.c test_concurrent.c
 LDFLAGS=-pthread
-test_concurrent_OBJ= array_heap.o heap.o test_concurrent.o
+test_concurrent_OBJ= array_heap.o heap.o dl_skiplist.o test_concurrent.o
 lockfree_test_SOURCES=lockfree_test.cpp
 CPPFLAGS=-std=c++0x
 lockfree_test_OBJ= lockfree_test.o

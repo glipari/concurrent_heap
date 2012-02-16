@@ -6,6 +6,7 @@
 #include <time.h>
 #include "heap.h"
 #include "array_heap.h"
+#include "dl_skiplist.h"
 #include "common_ops.h"
 #include "rq_heap.h"
 
@@ -26,11 +27,13 @@
 void *data_struct;
 heap_t heap;
 array_heap_t array_heap;
+dl_skiplist_t dl_skiplist;
 pthread_t threads[NPROCESSORS];
 int last_pid = 0; /* operations on this MUST be ATOMIC */
 struct data_struct_ops *dso;
 extern struct data_struct_ops array_heap_ops;
 extern struct data_struct_ops heap_ops;
+extern struct data_struct_ops dl_skiplist_ops;
 
 typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2} data_struct_t;
 typedef enum {ARRIVAL=0, FINISH=1, NOTHING=2} operation_t;
@@ -311,6 +314,8 @@ data_struct_t parse_user_options(int argc, char **argv)
 				break;
 			case 's':
 				data_type = SKIPLIST;
+				dso = &dl_skiplist_ops;
+				data_struct = &dl_skiplist;
 				break;
 			default:
 				printf("data_type is not valid!\n");
@@ -345,8 +350,8 @@ int main(int argc, char **argv)
     		printf("Initializing the array_heap\n");
 		break;
 	    case SKIPLIST:
-		printf("skiplist is not yet implemented!\n");
-		exit(-1);
+				printf("Initializing the skiplist\n");
+		break;
 	    default:
 		exit(-1);
     }
