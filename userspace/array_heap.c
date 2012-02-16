@@ -77,62 +77,69 @@ void print_array_heap(void *s, int nproc) {
 	pthread_spin_unlock(&h->lock);
 }
 
-/* Move down the item at position idx as to not violate the
+/* 
+ * Move down the item at position idx as to not violate the
  * max-heap property.
  */
-void max_heapify(array_heap_t *h, int idx, int *new_idx) {
+void max_heapify(array_heap_t *h, int idx) {
 	int l, r, largest;
 
 	l = left_child(idx);
 	r = right_child(idx);
-	if ((l <= h->size) && __dl_time_before(h->elements[idx].dl, h->elements[l].dl))
+#ifdef DEBUG
+	printf("idx = (%d, %llu)\n", idx, h->elements[idx].dl);
+	printf("l = (%d,%llu), r = (%d,%llu)\n", l, h->elements[l].dl,
+			r, h->elements[r].dl);
+#endif
+	if ((l < h->size) && __dl_time_before(h->elements[idx].dl, h->elements[l].dl))
 		largest = l;
 	else
 		largest = idx;
-	if ((r <= h->size) && __dl_time_before(h->elements[largest].dl,
+	if ((r < h->size) && __dl_time_before(h->elements[largest].dl,
 				h->elements[r].dl))
 		largest = r;
 	if (largest != idx) {
-		/*printf("exchanging %d with %d\n", largest, idx);*/
+#ifdef DEBUG
+		printf("exchanging %d with %d\n", largest, idx);
+#endif
 		exchange(h, largest, idx);
-		max_heapify(h, largest, new_idx);
-	} else if (new_idx != NULL)
-		*new_idx = largest;
+		max_heapify(h, largest);
+	}
 
 	return;
 }
 
-/* Sets a new key for the element at position idx.
- * Returns the new idx for that element.
+/* 
+ * Sets a new key for the element at position idx.
  */
-int heap_change_key(array_heap_t *h, int idx, __u64 new_dl) {
-	/*
-	 * if (idx > ELEM_NUM) {
-	 *	printf("warning: idx = %d\n", idx);
-	 * }
-	 */
+void heap_change_key(array_heap_t *h, int idx, __u64 new_dl) {
+	int cpu;
 
 	if (__dl_time_before(new_dl, h->elements[idx].dl)) {
-		/*printf("decreasing key for element: %d\n", idx);*/
 		h->elements[idx].dl = new_dl;
-		max_heapify(h, idx, &idx);
+#ifdef DEBUG
+		printf("decreasing key for element: %d\n", idx);
+#endif
+		max_heapify(h, idx);
 	} else {
 		h->elements[idx].dl = new_dl;
+#ifdef DEBUG
+		printf("increasing key for element: %d\n", idx);
+#endif
 		while (idx > 0 && __dl_time_before(h->elements[parent(idx)].dl,
 					h->elements[idx].dl)) {
 			exchange(h, idx, parent(idx));
 			idx = parent(idx);
 		}
 	}
-
-	return idx;
+	
 }
 
 /* Inserts a new key in the heap.
  * Returns the position where the new element has been added.
  */
 int heap_set(void *s, int cpu, __u64 dline, int is_valid) {
-	int idx, old_idx;
+	int idx, old_idx, new_cpu;
 	array_heap_t *h = (array_heap_t*) s;
 
 	/*
@@ -144,7 +151,7 @@ int heap_set(void *s, int cpu, __u64 dline, int is_valid) {
 	pthread_spin_lock(&h->lock);
 	old_idx = h->cpu_to_idx[cpu];
 	if (!is_valid) {
-		int new_cpu = h->elements[h->size - 1].cpu;
+		new_cpu = h->elements[h->size - 1].cpu;
 		h->elements[old_idx].dl = h->elements[h->size - 1].dl;
 		h->elements[old_idx].cpu = new_cpu;
 		h->size--;
@@ -156,7 +163,7 @@ int heap_set(void *s, int cpu, __u64 dline, int is_valid) {
 			exchange(h, old_idx, parent(old_idx));
 			old_idx = parent(old_idx);
 		}
-		max_heapify(h, old_idx, NULL);
+		max_heapify(h, old_idx);
 
 		pthread_spin_unlock(&h->lock);
 		return -1;
@@ -167,11 +174,9 @@ int heap_set(void *s, int cpu, __u64 dline, int is_valid) {
 		h->elements[h->size - 1].dl = 0;
 		h->elements[h->size - 1].cpu = cpu;
 		h->cpu_to_idx[cpu] = h->size - 1;
-		idx = heap_change_key(h, h->size - 1, dline);
-		h->elements[idx].cpu = cpu;
+		heap_change_key(h, h->size - 1, dline);
 	} else {
-		idx = heap_change_key(h, old_idx, dline);
-		h->elements[idx].cpu = cpu;
+		heap_change_key(h, old_idx, dline);
 	}
 
 	pthread_spin_unlock(&h->lock);
@@ -186,7 +191,7 @@ int heap_maximum(void *s) {
 
 /* Extracts and returns the maximum of the heap.
  */
-int heap_extract_max(array_heap_t *h, int cpu) {
+/*int heap_extract_max(array_heap_t *h, int cpu) {
 	int max;
 
 	if (h->size < 1) {
@@ -217,7 +222,7 @@ int heap_extract_max(array_heap_t *h, int cpu) {
 	}
 
 	return max;
-}
+}*/
 
 int array_heap_check(void *s, int nproc)
 {
@@ -233,9 +238,8 @@ int array_heap_check(void *s, int nproc)
 		 */
 		if (h->cpu_to_idx[i] != IDX_INVALID &&
 			h->elements[h->cpu_to_idx[i]].cpu != i) {
-			printf("CPU %d is in position %d, but is registered at"
-				" position %d!\n", h->elements[i].cpu,
-				i, h->cpu_to_idx[h->elements[i].cpu]);
+			printf("CPU %d is wrongly registered at"
+				" position %d!\n", i, h->cpu_to_idx[i]);
 			flag = 0;
 			goto out;
 		}
@@ -243,7 +247,7 @@ int array_heap_check(void *s, int nproc)
 		/*
 		 * check if dline(i) > dline(left_child(i))
 		 */
-		if (left_child(i) < nproc && __dl_time_before(h->elements[i].dl,
+		if (left_child(i) < h->size && __dl_time_before(h->elements[i].dl,
 				h->elements[left_child(i)].dl) &&
 				h->cpu_to_idx[i] != IDX_INVALID) {
 			printf("Node %d has deadline %llu which is smaller"
@@ -257,7 +261,7 @@ int array_heap_check(void *s, int nproc)
 		/*
 		 * check if dline(i) > dline(right_child(i))
 		 */
-		if (right_child(i) < nproc && __dl_time_before(h->elements[i].dl,
+		if (right_child(i) < h->size && __dl_time_before(h->elements[i].dl,
 				h->elements[right_child(i)].dl) &&
 				h->cpu_to_idx[i] != IDX_INVALID) {
 			printf("Node %d has deadline %llu which is smaller"
