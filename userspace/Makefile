@@ -16,9 +16,9 @@ CC=gcc
 C_COMPILE=$(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 C_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
 C_LINK=$(CC) $(CFLAGS) $(LDFLAGS) -L.
-test_concurrent_SOURCES=array_heap.c heap.c test_concurrent.c
+test_concurrent_SOURCES=common_ops.c array_heap.c heap.c test_concurrent.c
 LDFLAGS=-pthread
-test_concurrent_OBJ= array_heap.o heap.o test_concurrent.o
+test_concurrent_OBJ= common_ops.o array_heap.o heap.o test_concurrent.o
 lockfree_test_SOURCES=lockfree_test.cpp
 CPPFLAGS=-std=c++0x
 lockfree_test_OBJ= lockfree_test.o

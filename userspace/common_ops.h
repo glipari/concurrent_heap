@@ -3,6 +3,8 @@
 
 #include <linux/types.h>
 #include <stdio.h>
+#include <pthread.h>
+#include "rq_heap.h"
 
 struct data_struct_ops {
 	void (*data_init) (void *s, int nproc);
@@ -37,4 +39,17 @@ struct task_struct {
 	int pid;
 	__u64 deadline;
 };
+
+struct rq {
+	struct rq_heap heap;
+	pthread_spinlock_t lock;
+	/* cache values */
+	__u64 earliest, next;
+};
+
+void rq_init (struct rq *rq);
+
+void rq_lock (struct rq *rq);
+
+void rq_unlock (struct rq *rq);
 #endif /*__COMMON_OPS__ */

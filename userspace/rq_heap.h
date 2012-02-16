@@ -31,6 +31,7 @@
 
 #ifndef __RQ_HEAP_H__
 #define __RQ_HEAP_H__
+#include <limits.h>
 
 #define NOT_IN_HEAP UINT_MAX
 

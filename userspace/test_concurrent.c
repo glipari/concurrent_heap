@@ -11,8 +11,8 @@
 
 //#define VERBOSE 
 
-#define NPROCESSORS    8
-#define NCYCLES        10000 /* 1 cycle = 1ms simulated time */
+#define NPROCESSORS    6
+#define NCYCLES        1000 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
 #define WAITCYCLE      10000
@@ -82,11 +82,11 @@ static int task_compare(struct rq_heap_node* _a, struct rq_heap_node* _b)
 	return __dl_time_before(a->deadline, b->deadline);
 }
 
-static void add_task(struct rq_heap* heap, struct task_struct* task)
+static void add_task(struct rq* rq, struct task_struct* task)
 {
 	struct rq_heap_node* hn = malloc(sizeof(struct rq_heap_node));
 	rq_heap_node_init(hn, task);
-	rq_heap_insert(task_compare, heap, hn);
+	rq_heap_insert(task_compare, &rq->heap, hn);
 }
 
 operation_t select_operation()
@@ -128,13 +128,13 @@ void *processor(void *arg)
 {
 	int index = *((int*)arg);
 	int i, is_valid = 0;
-	struct rq_heap rq;
+	struct rq rq;
 	struct rq_heap_node *min;
 	struct task_struct *min_tsk, *new_tsk;
 	operation_t op;
 	struct timespec t_sleep, t_period;
 
-	rq_heap_init(&rq);
+	rq_init(&rq);
 #ifdef DEBUG
 	printf("[%d]: rq initialized\n", index);
 #endif
@@ -147,7 +147,8 @@ void *processor(void *arg)
 	for (i = 0; i < NCYCLES; i++) {
 		curr_clock++;
 
-		min = rq_heap_peek(task_compare, &rq);
+		rq_lock(&rq);
+		min = rq_heap_peek(task_compare, &rq.heap);
 		if (min != NULL) {
 			min_tsk = (struct task_struct*) rq_heap_node_value(min);
 			min_dl = min_tsk->deadline;
@@ -163,11 +164,11 @@ void *processor(void *arg)
 			 * remove task from rq
 			 * task finish
 			 */
-			rq_heap_take(task_compare, &rq);
+			rq_heap_take(task_compare, &rq.heap);
 
 			min_dl = 0;
 			is_valid = 0;
-			min = rq_heap_peek(task_compare, &rq);
+			min = rq_heap_peek(task_compare, &rq.heap);
 			if (min != NULL) {
 				min_tsk = (struct task_struct*) rq_heap_node_value(min);
 				min_dl = min_tsk->deadline;
@@ -213,7 +214,7 @@ void *processor(void *arg)
 #endif
 			}
 		} else if (op == FINISH) {
-			min = rq_heap_peek(task_compare, &rq);
+			min = rq_heap_peek(task_compare, &rq.heap);
 			if (min != NULL) {
 				/*
 				 * if rq is not empty take the first
@@ -223,7 +224,7 @@ void *processor(void *arg)
 				printf("[%d]: task finishes early\n", index);
 #endif
 				num_early_finish[index]++;
-				rq_heap_take(task_compare, &rq);
+				rq_heap_take(task_compare, &rq.heap);
 
 				/*
 				 * than see if the next task is to be scheduled
@@ -231,7 +232,7 @@ void *processor(void *arg)
 				 */
 				min_dl = 0;
 				is_valid = 0;
-				min = rq_heap_peek(task_compare, &rq);
+				min = rq_heap_peek(task_compare, &rq.heap);
 				if (min != NULL) {
 					min_tsk = (struct task_struct*) rq_heap_node_value(min);
 					min_dl = min_tsk->deadline;
@@ -250,6 +251,7 @@ void *processor(void *arg)
 			}
 		}
 
+		rq_unlock(&rq);
 #ifdef DEBUG
 		dso->data_print(data_struct, NPROCESSORS);
 #endif
