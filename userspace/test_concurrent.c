@@ -11,8 +11,8 @@
 
 //#define VERBOSE 
 
-#define NPROCESSORS    12
-#define NCYCLES        10000 /* 1 cycle = 1ms simulated time */
+#define NPROCESSORS    48
+#define NCYCLES        100000 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
 #define WAITCYCLE      10000
@@ -329,7 +329,7 @@ int main(int argc, char **argv)
 
     signal(SIGINT, signal_handler);
 #ifdef DEBUG
-    srand(1);
+    srand(time(NULL));
 #else
     srand(time(NULL));
 #endif

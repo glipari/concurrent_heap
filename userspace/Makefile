@@ -10,8 +10,8 @@ CFLAGS = -g
 top="$(CURDIR)"/
 ede_FILES=Project.ede Makefile
 
-main_SOURCES=heap.h heap.c main.c
-main_OBJ= heap.o main.o
+main_SOURCES=array_heap.h array_heap.c heap.h heap.c main.c
+main_OBJ= array_heap.o heap.o main.o
 CC=gcc
 C_COMPILE=$(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 C_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
@@ -30,7 +30,7 @@ VERSION=1.0
 DISTDIR=$(top)fine_grain_lock-$(VERSION)
 top_builddir = 
 
-DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P .deps/lockfree_test.P
+DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/array_heap.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P .deps/lockfree_test.P
 
 all: test_concurrent lockfree_test
 
