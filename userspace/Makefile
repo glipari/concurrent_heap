@@ -30,7 +30,7 @@ VERSION=1.0
 DISTDIR=$(top)fine_grain_lock-$(VERSION)
 top_builddir = 
 
-DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/dl_skiplist.P .deps/array_heap.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P .deps/lockfree_test.P
+DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/common_ops.P .deps/dl_skiplist.P .deps/array_heap.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P .deps/lockfree_test.P
 
 all: test_concurrent lockfree_test
 

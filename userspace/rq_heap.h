@@ -47,10 +47,11 @@ struct rq_heap_node {
 
 struct rq_heap {
 	struct rq_heap_node* 	head;
-	/* We cache the minimum of the rq_heap.
+	/* We cache minimum and next of the heap.
 	 * This speeds up repeated peek operations.
 	 */
 	struct rq_heap_node*	min;
+	struct rq_heap_node*	next;
 };
 
 /* item comparison function:
@@ -62,6 +63,7 @@ static inline void rq_heap_init(struct rq_heap* heap)
 {
 	heap->head = NULL;
 	heap->min  = NULL;
+	heap->next  = NULL;
 }
 
 static inline void rq_heap_node_init_ref(struct rq_heap_node** _h, void* value)
@@ -238,7 +240,7 @@ static inline struct rq_heap_node* __rq_heap_extract_min(rq_heap_prio_t higher_p
 static inline void rq_heap_insert(rq_heap_prio_t higher_prio, struct rq_heap* heap,
 			       struct rq_heap_node* node)
 {
-	struct rq_heap_node *min;
+	struct rq_heap_node *min, *next;
 	node->child  = NULL;
 	node->parent = NULL;
 	node->next   = NULL;
@@ -252,13 +254,34 @@ static inline void rq_heap_insert(rq_heap_prio_t higher_prio, struct rq_heap* he
 		min->degree = 0;
 		__rq_heap_union(higher_prio, heap, min);
 		heap->min   = node;
+	} else if (heap->next && higher_prio(node, heap->next)) {
+		/* swap next cache */
+		next = heap->next;
+		next->child  = NULL;
+		next->parent = NULL;
+		next->next   = NULL;
+		next->degree = 0;
+		__rq_heap_union(higher_prio, heap, next);
+		heap->next   = node;
 	} else
 		__rq_heap_union(higher_prio, heap, node);
+}
+
+static inline void __uncache_next(rq_heap_prio_t higher_prio, struct rq_heap* heap)
+{
+	struct rq_heap_node* next;
+	if (heap->next) {
+		next = heap->next;
+		heap->next = NULL;
+		rq_heap_insert(higher_prio, heap, next);
+	}
 }
 
 static inline void __uncache_min(rq_heap_prio_t higher_prio, struct rq_heap* heap)
 {
 	struct rq_heap_node* min;
+
+	__uncache_next(higher_prio, heap);
 	if (heap->min) {
 		min = heap->min;
 		heap->min = NULL;
@@ -286,14 +309,27 @@ static inline struct rq_heap_node* rq_heap_peek(rq_heap_prio_t higher_prio,
 	return heap->min;
 }
 
+static inline struct rq_heap_node* rq_heap_peek_next(rq_heap_prio_t higher_prio,
+					  struct rq_heap* heap)
+{
+	if (!heap->min)
+		heap->min = __rq_heap_extract_min(higher_prio, heap);
+	if (!heap->next)
+		heap->next = __rq_heap_extract_min(higher_prio, heap);
+	return heap->next;
+}
+
 static inline struct rq_heap_node* rq_heap_take(rq_heap_prio_t higher_prio,
 					  struct rq_heap* heap)
 {
 	struct rq_heap_node *node;
 	if (!heap->min)
 		heap->min = __rq_heap_extract_min(higher_prio, heap);
+	if (!heap->next)
+		heap->next = __rq_heap_extract_min(higher_prio, heap);
 	node = heap->min;
-	heap->min = NULL;
+	heap->min = heap->next;
+	heap->next = __rq_heap_extract_min(higher_prio, heap);
 	if (node)
 		node->degree = NOT_IN_HEAP;
 	return node;
@@ -309,7 +345,11 @@ static inline void rq_heap_decrease(rq_heap_prio_t higher_prio, struct rq_heap* 
 	/* node's priority was decreased, we need to update its position */
 	if (!node->ref)
 		return;
-	if (heap->min != node) {
+	if (heap->min != node && heap->next != node) {
+		if (heap->min && higher_prio(node, heap->min))
+			__uncache_min(higher_prio, heap);
+		else if (heap->next && higher_prio(node, heap->next))
+			__uncache_next(higher_prio, heap);
 		/* bubble up */
 		parent = node->parent;
 		while (parent && higher_prio(node, parent)) {
@@ -328,6 +368,18 @@ static inline void rq_heap_decrease(rq_heap_prio_t higher_prio, struct rq_heap* 
 			node   = parent;
 			parent = node->parent;
 		}
+	} else if (heap->next == node && higher_prio(heap->next, heap->min)) {
+			/* swap min and next */
+			tmp           = heap->min->value;
+			heap->min->value = heap->next->value;
+			heap->next->value   = tmp;
+			/* swap references */
+			if (heap->min->ref)
+				*(heap->min->ref) = heap->next;
+			*(heap->next->ref)   = heap->min;
+			tmp_ref        = heap->min->ref;
+			heap->min->ref    = heap->next->ref;
+			heap->next->ref      = tmp_ref;
 	}
 }
 
@@ -340,7 +392,7 @@ static inline void rq_heap_delete(rq_heap_prio_t higher_prio, struct rq_heap* he
 
 	if (!node->ref) /* can only delete if we have a reference */
 		return;
-	if (heap->min != node) {
+	if (heap->min != node && heap->next != node) {
 		/* bubble up */
 		parent = node->parent;
 		while (parent) {
@@ -373,8 +425,11 @@ static inline void rq_heap_delete(rq_heap_prio_t higher_prio, struct rq_heap* he
 		else
 			heap->head = node->next;
 		__rq_heap_union(higher_prio, heap, __rq_heap_reverse(node->child));
-	} else
-		heap->min = NULL;
+	} else if (heap->min == node) {
+		heap->min = heap->next;
+		heap->next = __rq_heap_extract_min(higher_prio, heap);
+	} else 
+		heap->next = NULL;
 	node->degree = NOT_IN_HEAP;
 }
 

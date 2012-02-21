@@ -45,11 +45,22 @@ struct rq {
 	pthread_spinlock_t lock;
 	/* cache values */
 	__u64 earliest, next;
+	int nrunning, overloaded;
 };
+
+typedef struct rq_heap_node rq_node_struct;
 
 void rq_init (struct rq *rq);
 
 void rq_lock (struct rq *rq);
 
 void rq_unlock (struct rq *rq);
+
+rq_node_struct* rq_peek (struct rq *rq);
+
+rq_node_struct* rq_take (struct rq *rq);
+
+struct task_struct* rq_node_task_struct(rq_node_struct* h);
+
+void add_task_rq(struct rq* rq, struct task_struct* task);
 #endif /*__COMMON_OPS__ */

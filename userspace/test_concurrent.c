@@ -76,22 +76,6 @@ timespec_add(struct timespec *t1, struct timespec *t2)
 	return ts;
 }
 
-static int task_compare(struct rq_heap_node* _a, struct rq_heap_node* _b)
-{
-	struct task_struct *a, *b;
-	a = (struct task_struct*) rq_heap_node_value(_a);
-	b = (struct task_struct*) rq_heap_node_value(_b);
-
-	return __dl_time_before(a->deadline, b->deadline);
-}
-
-static void add_task(struct rq* rq, struct task_struct* task)
-{
-	struct rq_heap_node* hn = malloc(sizeof(struct rq_heap_node));
-	rq_heap_node_init(hn, task);
-	rq_heap_insert(task_compare, &rq->heap, hn);
-}
-
 operation_t select_operation()
 {
 	operation_t i = 0;
@@ -132,7 +116,7 @@ void *processor(void *arg)
 	int index = *((int*)arg);
 	int i, is_valid = 0;
 	struct rq rq;
-	struct rq_heap_node *min;
+	rq_node_struct *min;
 	struct task_struct *min_tsk, *new_tsk;
 	operation_t op;
 	struct timespec t_sleep, t_period;
@@ -151,10 +135,15 @@ void *processor(void *arg)
 		curr_clock++;
 
 		rq_lock(&rq);
-		min = rq_heap_peek(task_compare, &rq.heap);
+		min = rq_peek(&rq);
 		if (min != NULL) {
-			min_tsk = (struct task_struct*) rq_heap_node_value(min);
+			min_tsk = rq_node_task_struct(min);
 			min_dl = min_tsk->deadline;
+#ifdef DEBUG
+			printf("[%d]: there is a queued task (%d,%llu)\n",
+					index, 
+					min_tsk->pid , min_tsk->deadline);
+#endif
 		}
 
 #ifdef DEBUG
@@ -167,13 +156,13 @@ void *processor(void *arg)
 			 * remove task from rq
 			 * task finish
 			 */
-			rq_heap_take(task_compare, &rq.heap);
+			rq_take(&rq);
 
 			min_dl = 0;
 			is_valid = 0;
-			min = rq_heap_peek(task_compare, &rq.heap);
+			min = rq_peek(&rq);
 			if (min != NULL) {
-				min_tsk = (struct task_struct*) rq_heap_node_value(min);
+				min_tsk = rq_node_task_struct(min);
 				min_dl = min_tsk->deadline;
 				is_valid = 1;
 			}
@@ -203,21 +192,23 @@ void *processor(void *arg)
 					new_tsk->pid, new_tsk->deadline);
 #endif
 
-			add_task(&rq, new_tsk);
+			add_task_rq(&rq, new_tsk);
 			if (__dl_time_before(new_dl, min_dl)) {
 				dso->data_preempt(data_struct, index, new_dl, 1);
 #ifdef DEBUG
 				printf("[%d]: preemption!\n", index);
 #endif
 				num_preemptions[index]++;
+				min_dl = new_dl;
 			} else if (min_dl == 0) {
 				dso->data_preempt(data_struct, index, new_dl, 1);
+				min_dl = new_dl;
 #ifdef DEBUG
 				printf("[%d]: no more empty\n", index);
 #endif
 			}
 		} else if (op == FINISH) {
-			min = rq_heap_peek(task_compare, &rq.heap);
+			min = rq_peek(&rq);
 			if (min != NULL) {
 				/*
 				 * if rq is not empty take the first
@@ -227,7 +218,7 @@ void *processor(void *arg)
 				printf("[%d]: task finishes early\n", index);
 #endif
 				num_early_finish[index]++;
-				rq_heap_take(task_compare, &rq.heap);
+				rq_take(&rq);
 
 				/*
 				 * than see if the next task is to be scheduled
@@ -235,9 +226,9 @@ void *processor(void *arg)
 				 */
 				min_dl = 0;
 				is_valid = 0;
-				min = rq_heap_peek(task_compare, &rq.heap);
+				min = rq_peek(&rq);
 				if (min != NULL) {
-					min_tsk = (struct task_struct*) rq_heap_node_value(min);
+					min_tsk = rq_node_task_struct(min);
 					min_dl = min_tsk->deadline;
 					is_valid = 1;
 				}
@@ -335,12 +326,7 @@ int main(int argc, char **argv)
     int i;
 
     signal(SIGINT, signal_handler);
-#ifdef DEBUG
     srand(time(NULL));
-#else
-    srand(time(NULL));
-#endif
-
 
     data_type = parse_user_options(argc, argv);
 
