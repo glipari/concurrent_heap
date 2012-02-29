@@ -120,3 +120,83 @@ void add_task_rq(struct rq* rq, struct task_struct* task)
 #endif
 }
 
+void rq_pull_tasks(struct rq* this_rq)
+{
+	return;
+}
+
+static struct rq* find_lock_later_rq(struct task_struct *next_task,
+		struct rq *this_rq)
+{
+	return NULL;
+}
+
+static int rq_push_task(struct rq* this_rq)
+{
+	struct task_struct *next_task;
+	struct rq *later_rq;
+
+	if (!this_rq->overloaded)
+		return 0;
+
+	next_task = rq_heap_peek_next(task_compare, &this_rq->heap);
+	if (!next_task)
+		return 0;
+
+retry:
+	if (next_task == rq_heap_peek(task_compare, &this_rq->heap)) {
+		printf("WARNING: next_task = min_task inside push\n");
+		exit(-1);
+	}
+
+	/*
+	 * Will lock the rq it'll find
+	 */
+	later_rq = find_lock_later_rq(next_task, this_rq);
+	if (!later_rq) {
+		struct task_struct *task;
+
+		/*
+		 * We must check all this again. find_lock_later_rq
+		 * releases rq->lock, then it is possible that next_task
+		 * has migrated
+		 */
+		task = rq_heap_peek_next(task_compare, &this_rq->heap);
+		if (task == next_task) {
+			/*
+			 * The task is still there, we don't try
+			 * again.
+			 */
+			goto out;
+		}
+
+		if (!task)
+			/*
+			 * No more tasks
+			 */
+			goto out;
+
+		next_task = task;
+		goto retry;
+	}
+
+	/*
+	 * Migrate task
+	 */
+	rq_heap_take_next(task_compare, &rq->heap);
+	add_task_rq(&later_rq, next_task);
+	//FIXME call preempt on later_rq
+
+out:
+	return 1;
+}
+
+void rq_push_tasks(struct rq* this_rq)
+{
+	/*
+	 * Terminates as is fails to move
+	 * a task
+	 */
+	while (rq_push_task(this_rq))
+		;
+}

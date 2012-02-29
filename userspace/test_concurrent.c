@@ -135,6 +135,7 @@ void *processor(void *arg)
 		curr_clock++;
 
 		rq_lock(&rq);
+		rq_pull_tasks(&rq);
 		min = rq_peek(&rq);
 		if (min != NULL) {
 			min_tsk = rq_node_task_struct(min);
@@ -244,6 +245,8 @@ void *processor(void *arg)
 				num_finish[index]++;
 			}
 		}
+
+		rq_push_tasks(&rq);
 
 		rq_unlock(&rq);
 #ifdef DEBUG

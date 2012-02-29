@@ -63,4 +63,8 @@ rq_node_struct* rq_take (struct rq *rq);
 struct task_struct* rq_node_task_struct(rq_node_struct* h);
 
 void add_task_rq(struct rq* rq, struct task_struct* task);
+
+void rq_pull_tasks(struct rq* this_rq);
+
+void rq_push_tasks(struct rq* this_rq);
 #endif /*__COMMON_OPS__ */
