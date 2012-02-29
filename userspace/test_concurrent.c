@@ -7,13 +7,14 @@
 #include "heap.h"
 #include "array_heap.h"
 #include "dl_skiplist.h"
+#include "fc_dl_skiplist.h"
 #include "common_ops.h"
 #include "rq_heap.h"
 
-//#define VERBOSE 
+//#define VERBOSE
 
 #define NPROCESSORS    48
-#define NCYCLES        100000 /* 1 cycle = 1ms simulated time */
+#define NCYCLES        10000 /* 1 cycle = 1ms simulated time */
 #define DMIN           10
 #define DMAX           100
 #define WAITCYCLE      10000
@@ -28,14 +29,16 @@ void *data_struct;
 heap_t heap;
 array_heap_t array_heap;
 dl_skiplist_t dl_skiplist;
+fc_dl_skiplist_t fc_skiplist;
 pthread_t threads[NPROCESSORS];
 int last_pid = 0; /* operations on this MUST be ATOMIC */
 struct data_struct_ops *dso;
 extern struct data_struct_ops array_heap_ops;
 extern struct data_struct_ops heap_ops;
 extern struct data_struct_ops dl_skiplist_ops;
+extern struct data_struct_ops fc_dl_skiplist_ops;
 
-typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2} data_struct_t;
+typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2, FC_SKIPLIST=3} data_struct_t;
 typedef enum {ARRIVAL=0, FINISH=1, NOTHING=2} operation_t;
 /*
  * 20% probability of new arrival
@@ -297,10 +300,11 @@ data_struct_t parse_user_options(int argc, char **argv)
 			"\n\tOPTION:\n"
 			"\t  -a array_heap\n"
 			"\t  -h heap\n"
-			"\t  -s skiplist\n");
+			"\t  -s skiplist\n"
+			"\t  -f flat_combining_skiplist");
 		exit(-1);
 	}
-	while ((c = getopt(argc, argv, "has")) != -1)
+	while ((c = getopt(argc, argv, "hasf")) != -1)
 		switch (c) {
 			case 'h':
 				data_type = HEAP;
@@ -316,6 +320,11 @@ data_struct_t parse_user_options(int argc, char **argv)
 				data_type = SKIPLIST;
 				dso = &dl_skiplist_ops;
 				data_struct = &dl_skiplist;
+				break;
+			case 'f':
+				data_type = FC_SKIPLIST;
+				dso = &fc_dl_skiplist_ops;
+				data_struct = &fc_skiplist;
 				break;
 			default:
 				printf("data_type is not valid!\n");
@@ -351,6 +360,9 @@ int main(int argc, char **argv)
 		break;
 	    case SKIPLIST:
 				printf("Initializing the skiplist\n");
+		break;
+			case FC_SKIPLIST:
+				printf("Initializing the flat_combining_skiplist\n");
 		break;
 	    default:
 		exit(-1);
