@@ -5,34 +5,26 @@
 # EDE is the Emacs Development Environment.
 # http://cedet.sourceforge.net/ede.shtml
 #
-CFLAGS = -g
+CFLAGS = -O3 #-g -pg
 
 top="$(CURDIR)"/
 ede_FILES=Project.ede Makefile
 
-main_SOURCES=array_heap.h array_heap.c heap.h heap.c dl_skiplist.c main.c
+main_SOURCES=array_heap.h array_heap.c heap.h heap.c dl_skipist.h dl_skiplist.c fc_dl_skipist.h fc_dl_skiplist.c flat_combining.h flat_combining.c main.c
 main_OBJ= array_heap.o heap.o dl_skiplist.o main.o
 CC=gcc
 C_COMPILE=$(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 C_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
 C_LINK=$(CC) $(CFLAGS) $(LDFLAGS) -L.
-test_concurrent_SOURCES=common_ops.c array_heap.c heap.c dl_skiplist.c test_concurrent.c
+test_concurrent_SOURCES=array_heap.c heap.c dl_skiplist.c fc_dl_skiplist.c flat_combining.c test_concurrent.c
 LDFLAGS=-pthread
-test_concurrent_OBJ= common_ops.c array_heap.o heap.o dl_skiplist.o test_concurrent.o
-lockfree_test_SOURCES=lockfree_test.cpp
-CPPFLAGS=-std=c++0x
-lockfree_test_OBJ= lockfree_test.o
-CXX= g++
-CXX_COMPILE=$(CXX) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
-CXX_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
-CXX_LINK=$(CXX) $(CFLAGS) $(LDFLAGS) -L.
+test_concurrent_OBJ= array_heap.o heap.o dl_skiplist.o fc_dl_skiplist.o flat_combining.o test_concurrent.o
 VERSION=1.0
 DISTDIR=$(top)fine_grain_lock-$(VERSION)
 top_builddir = 
+DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/array_heap.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P
 
-DEP_FILES=.deps/heap.P .deps/heap.P .deps/main.P .deps/common_ops.P .deps/dl_skiplist.P .deps/array_heap.P .deps/heap.P .deps/test_concurrent.P .deps/heap.P .deps/lockfree_test.P
-
-all: test_concurrent lockfree_test
+all: test_concurrent
 
 debug: CC += -DDEBUG
 debug: all
@@ -54,9 +46,6 @@ test_concurrent: $(test_concurrent_OBJ)
 	@echo '$(CXX_COMPILE) -c $<'; \
 	$(CXX_COMPILE) $(CXX_DEPENDENCIES) -o $@ -c $<
 
-lockfree_test: $(lockfree_test_OBJ)
-	$(CXX_LINK) -o $@ $^
-
 tags: 
 
 
@@ -68,7 +57,7 @@ clean:
 dist:
 	rm -rf $(DISTDIR)
 	mkdir $(DISTDIR)
-	cp $(main_SOURCES) $(test_concurrent_SOURCES) $(lockfree_test_SOURCES) $(ede_FILES) $(DISTDIR)
+	cp $(main_SOURCES) $(test_concurrent_SOURCES) $(ede_FILES) $(DISTDIR)
 	tar -cvzf $(DISTDIR).tar.gz $(DISTDIR)
 	rm -rf $(DISTDIR)
 
