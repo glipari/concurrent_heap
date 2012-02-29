@@ -45,12 +45,11 @@ struct dl_sl_node{
  * \return torna 1 se a > b, 0 se a == b, -1 se a < b 
  */
 static inline int compare_dline(const __u64 a, const __u64 b){
-	if((__s64)(a - b) == 0)
-		return 0;
-	if((__s64)(a - b) > 0)
+	if(a > b)
 		return 1;
-	if((__s64)(a - b) < 0)
+	if(a < b)
 		return -1;
+	return 0;
 }
 
 /*! \brief Sgancia un nodo dalla skiplist
@@ -389,9 +388,9 @@ int dl_sl_check(void *s, int nproc){
 			continue;
 		
 		/* check */
-		while(next_node = node->next[i]){
+		while((next_node = node->next[i])){
 			if(compare_dline(node->dline, next_node->dline) > 0)
-				flag = 1;
+				flag = 0;
 			node = next_node;
 		}
 	}
@@ -409,7 +408,7 @@ int dl_sl_check(void *s, int nproc){
 		/* check */
 		while(prev_node = node->prev[i]){
 			if(compare_dline(prev_node->dline, node->dline) > 0)
-				flag = 1;
+				flag = 0;
 			node = prev_node;
 		}
 	}

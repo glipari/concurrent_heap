@@ -1,9 +1,0 @@
-N_Nodes: 8
-index 4	deadline 180
-index 7	deadline 160
-index 6	deadline 90
-index 1	deadline 120
-index 3	deadline 140
-index 5	deadline 80
-index 2	deadline 50
-index 0	deadline 100
