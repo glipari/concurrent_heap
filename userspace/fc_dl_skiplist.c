@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <inttypes.h>
 #include <linux/types.h>
 #include <time.h>
@@ -26,7 +25,7 @@ struct fc_dl_sl_node{
 	/*! \brief deadline del task */
 	__u64 dline;
 	/*! \brief Livello del nodo */
-	unsigned int level;
+	int level;
 	/*! \brief Puntatori ai nodi successivi nei vari livelli */
 	struct fc_dl_sl_node *next[MAX_LEVEL];
 	/*! \brief Puntatori ai nodi precedenti nei vari livelli */
@@ -38,23 +37,6 @@ struct fc_dl_sl_node{
 /************************************
 *					FUNZIONI STATICHE					*
 *************************************/
-
-/*! \brief Confronta 2 deadline
- *
- * Effettua il confronto tra 2 deadline con 3 test condizionali,
- * Non si ritorna direttamente la differenza (__s64)(a - b) per
- * evitare problemi di overflow nel cast a int
- * \param [in] a deadline 1
- * \param [in] b deadline 2
- * \return torna 1 se a > b, 0 se a == b, -1 se a < b 
- */
-static inline int fc_compare_dline(const __u64 a, const __u64 b){
-	if(a > b)
-		return 1;
-	if(a < b)
-		return -1;
-	return 0;
-}
 
 /*! \brief Sgancia un nodo dalla skiplist
  *
@@ -83,6 +65,9 @@ static inline __u64 fc_dl_sl_detach(struct fc_dl_sl *list, struct fc_dl_sl_node 
 	while(!list->head->next[list->level] && list->level > 0)
 		list->level--;
 
+	/* si marca il nodo come sganciato dalla skiplist */
+	p->level = -1;
+
 	return p->dline;
 }
 
@@ -100,6 +85,10 @@ static __u64 fc_dl_sl_remove_idx(struct fc_dl_sl *list, const unsigned int rq_id
 	
 	/* puntatore al nodo */
 	p = list->rq_to_node[rq_idx];
+
+	/* nodo non inserito nella skiplist */
+	if(p->level < 0)
+		return 0;
 
 	/* sgancio del nodo dalla skiplist */
 	return fc_dl_sl_detach(list, p);
@@ -136,7 +125,7 @@ static inline unsigned int fc_dl_sl_rand_level(unsigned int *seed, unsigned int 
  * \param [in] t puntatore al task da inserire
  * \return 0 in caso di successo, -1 altrimenti
  */
-static int fc_dl_sl_insert(struct fc_dl_sl *list, const unsigned int rq_idx, __u64 dline){
+static int fc_dl_sl_insert(struct fc_dl_sl *list, const unsigned int rq_idx, __u64 dline, int (*cmp_dl)(__u64 a, __u64 b)){
 	struct fc_dl_sl_node *p;
 	struct fc_dl_sl_node *update[MAX_LEVEL];
 	struct fc_dl_sl_node *new_node;
@@ -162,9 +151,9 @@ static int fc_dl_sl_insert(struct fc_dl_sl *list, const unsigned int rq_idx, __u
 		}
 		
 		/* abbiamo un elemento davanti, lo confrontiamo con l'elemento da inserire */
-		cmp_res = fc_compare_dline(p->next[level]->dline, new_node->dline);
+		cmp_res = cmp_dl(p->next[level]->dline, new_node->dline);
 		
-		if(cmp_res < 0)		/* se l'elemento esaminato è minore del nuovo si prosegue in orizzontale */
+		if(cmp_res > 0)		/* se l'elemento esaminato è minore del nuovo si prosegue in orizzontale */
 			p = p->next[level];
 		else				/* altrimenti si scende un livello */
 			level--;
@@ -191,23 +180,23 @@ static int fc_dl_sl_insert(struct fc_dl_sl *list, const unsigned int rq_idx, __u
 	return 0;
 }
 
-static void fc_dl_sl_init_load(struct fc_dl_sl *list){
+#if 0
+static void fc_dl_sl_init_load(struct fc_dl_sl *list, int (*cmp_dl)(__u64 a, __u64 b)){
 	unsigned int i;
 	__u64 dline;
 
-	memset(&dline, 255, sizeof(dline));
+	dline = MAX_DL;
 	
 	for(i = 0; i < list->rq_num; i++)
-		fc_dl_sl_insert(list, i, dline);
+		fc_dl_sl_insert(list, i, dline, cmp_dl);
 }
+#endif
 
-/* is_valid non è utilizzato */
 static int old_fc_dl_sl_preempt(void *s, int cpu, __u64 dline, int is_valid){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
-	__u64 old_dline;
 
-	old_dline = fc_dl_sl_remove_idx(p->list, cpu);
-	if(fc_dl_sl_insert(p->list, cpu, dline) < 0){
+	fc_dl_sl_remove_idx(p->list, cpu);
+	if(is_valid && fc_dl_sl_insert(p->list, cpu, dline, p->cmp_dl) < 0){
 		fprintf(stderr, "errore inserimento skiplist");
 		exit(-1);
 	}
@@ -215,37 +204,51 @@ static int old_fc_dl_sl_preempt(void *s, int cpu, __u64 dline, int is_valid){
 	return 0;
 }
 
+#if 0
 static int old_fc_dl_sl_finish(void *s, int cpu, __u64 dline, int is_valid){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
 	__u64 old_dline, fake_dline;
 
-	memset(&fake_dline, 255, sizeof(fake_dline));
+	fake_dline = MAX_DL;
 
 	old_dline = fc_dl_sl_remove_idx(p->list, cpu);
 	if(is_valid)
-		fc_dl_sl_insert(p->list, cpu, dline);
+		fc_dl_sl_insert(p->list, cpu, dline, p->cmp_dl);
 	else
-		fc_dl_sl_insert(p->list, cpu, fake_dline);
+		fc_dl_sl_insert(p->list, cpu, fake_dline, p->cmp_dl);
 
 	return 0;
 }
+#endif
 
 /*
  * e' possibile implementare qui una ricerca lineare del primo nodo da sganciare nel caso
  * i precedenti contengano task non adatti all'operazione di pull (a causa della CPU affinity)
+ *
+ * Si copia p->list->head->next[0] in una variabile locale per evitare modifiche concorrenti
+ * la lettura di tale indirizzo è sicuramente atomica, poichè tale indirizzo è tornato da calloc()
+ * che ritorna indirizzi allineati alla dimensione del tipo primitivo più grande nell'architettura
+ * in uso (8 bytes per x86-32).
+ * Se si vuole avere garanzie maggiori sull'allineamento usare posix_memalign() e successivamente
+ * memset per azzerare la memoria in modo da ottenere un equivalente di calloc().
  */
 static int old_fc_dl_sl_find(void *s){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
-	int temp;
+	struct fc_dl_sl_node *node;
+	int cpu = -1;
 
-	temp = p->list->head->next[0]->rq_idx;
+	node = p->list->head->next[0];
+	if(node)
+		cpu = node->rq_idx;
 
-	return temp;
+	return cpu;
 }
 
 /* ancora da implementare */
 static void old_fc_dl_sl_load(void *s, FILE *f){
+#if 0
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
+#endif
 }
 
 static void old_fc_dl_sl_save(void *s, FILE *f){
@@ -253,6 +256,9 @@ static void old_fc_dl_sl_save(void *s, FILE *f){
 	struct fc_dl_sl_node *node;
 	int i;
 
+	fprintf(f, "\n----Skiplist----\n");
+
+	/* lista nodi */
 	for(i = p->list->level; i >= 0; i--){
 		fprintf(f, "%u:\t", i);
 		for(node = p->list->head->next[i]; node; node = node->next[i])
@@ -260,6 +266,15 @@ static void old_fc_dl_sl_save(void *s, FILE *f){
 		fprintf(f, "\n");
 	}
 
+	/* lista CPU - nodi */
+	for(i = 0; i < p->list->rq_num; i++)
+		if(p->list->rq_to_node[i]->level == -1)
+			fprintf(f, "[%d]:\tout of list\n", i);
+		else
+			fprintf(f, "[%d]:\t%llu\n", i, p->list->rq_to_node[i]->dline);
+	fprintf(f, "\n");
+
+	fprintf(f, "----End Skiplist----\n\n");
 }
 
 /* nproc non è utilizzato qui */
@@ -270,7 +285,7 @@ static void old_fc_dl_sl_print(void *s, int nproc){
 static int old_fc_dl_sl_check(void *s, int nproc){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
 	struct fc_dl_sl_node *node, *next_node, *prev_node;
-	unsigned int i, max_level;
+	unsigned int i, max_level = 0;
 	int flag = 1;
 
 	/* check numero livelli della skiplist */
@@ -285,6 +300,7 @@ static int old_fc_dl_sl_check(void *s, int nproc){
 		flag = 0;	
 	}
 
+#if 0
 	/* check numero elementi nella skiplist */
 	node = p->list->head;
 	for(i = 0; i < p->list->rq_num; i++)
@@ -293,6 +309,7 @@ static int old_fc_dl_sl_check(void *s, int nproc){
 		fprintf(stderr, "errore numero elementi skiplist");
 		flag = 0;
 	}
+#endif
 
 	/* 
 	 * check corretto ordinamento deadline
@@ -309,7 +326,7 @@ static int old_fc_dl_sl_check(void *s, int nproc){
 
 		/* check */
 		while((next_node = node->next[i])){
-			if(fc_compare_dline(node->dline, next_node->dline) > 0){
+			if(p->cmp_dl(node->dline, next_node->dline) < 0){
 				fprintf(stderr, "errore forward check (level: %u) per elementi prev: %llu e next: %llu\n", i, node->dline, next_node->dline);
 				flag = 0;
 			}
@@ -329,7 +346,7 @@ static int old_fc_dl_sl_check(void *s, int nproc){
 			
 		/* check */
 		while((prev_node = node->prev[i])){
-			if(fc_compare_dline(prev_node->dline, node->dline) > 0){
+			if(p->cmp_dl(prev_node->dline, node->dline) < 0){
 				fprintf(stderr, "errore backward check (level: %u) per elementi prev: %llu e next: %llu\n", i, node->dline, next_node->dline);
 				flag = 0;
 			}
@@ -344,9 +361,26 @@ static int old_fc_dl_sl_check(void *s, int nproc){
 	return flag;
 }
 
-/* qui dovremo acquisire anche i lock sulle runqueue */
+int old_fc_dl_sl_check_cpu (void *s, int cpu, __u64 dline){
+	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
+	struct fc_dl_sl_node *node;
+	int flag = 1;
+
+	node = p->list->rq_to_node[cpu];
+	if(!node)
+		return 0;
+	
+	if(!dline && node->level != -1)
+		flag = 0;
+
+	if(dline > 0 && dline != node->dline)
+		flag = 0;
+	
+	return flag;
+}
+
 static void fc_dl_sl_do_combiner(fc_dl_skiplist_t *p){
-	pub_record *i, *j;
+	pub_record *i;
 	int cpu, is_valid;
 	__u64 dline;
 
@@ -360,32 +394,10 @@ static void fc_dl_sl_do_combiner(fc_dl_skiplist_t *p){
 				is_valid = i->par.preempt_p.is_valid;
 				i->res.preempt_r.res = old_fc_dl_sl_preempt((void *)p, cpu, dline, is_valid);
 				break;
-
-			case FIN:
-				cpu = i->par.finish_p.cpu;
-				dline = i->par.finish_p.dline;
-				is_valid = i->par.finish_p.is_valid;
-				i->res.finish_r.res = old_fc_dl_sl_finish((void *)p, cpu, dline, is_valid);
-				break;
-
-			case PUSH:
-
-				break;
-
-			case PULL:
-
-				break;
-
-			case FIND_MIN:
-				i->res.find_min_r.res = old_fc_dl_sl_find((void *)p);
-				break;
-
-			case FIND_MAX:
-
-				break;
 		}
 
 		SET_READY(i);
+		/* FIXME: ??? */
 		/* 
 		 * attenzione: il publication record deve rimanere ACTIVE finchè non è stata
 		 * letta la risposta. Poichè in questa simulazione le risposte vengono scartate
@@ -398,20 +410,10 @@ static void fc_dl_sl_do_combiner(fc_dl_skiplist_t *p){
 }
 
 static void fc_dl_sl_wait_response(fc_dl_skiplist_t *p/*, pub_record *r*/){
-	if(!pthread_mutex_trylock(&p->lock)){
+	if(!pthread_spin_trylock(&p->lock)){
 		fc_dl_sl_do_combiner(p);
-		pthread_mutex_unlock(&p->lock);
+		pthread_spin_unlock(&p->lock);
 	}
-
-#if 0
-	while(!IS_READY(r)){
-		if(!pthread_mutex_trylock(&p->lock)){
-			fc_dl_sl_do_combiner(p);
-			pthread_mutex_unlock(&p->lock);
-		}else
-			usleep(5);
-	}
-#endif
 }
 
 /*
@@ -421,17 +423,14 @@ static void fc_dl_sl_wait_response(fc_dl_skiplist_t *p/*, pub_record *r*/){
  */
 static pub_record *get_pub_record(fc_dl_skiplist_t *p, int cpu){
 	pub_record **array = p->p_record_array[cpu];
-	int i;
+	int idx = p->p_record_idx[cpu];
 
 	while(1){
-		for(i = 0; i < P_RECORD_PER_CPU; i++)
-			if(!IS_ACTIVE(array[i])){
-				ACTIVATE(array[i]);
-				return array[i];
-			}
-
-		fprintf(stderr, "Nessun publication record libero\n");
-
+		if(!IS_ACTIVE(array[idx])){
+			ACTIVATE(array[idx]);
+			p->p_record_idx[cpu] = (p->p_record_idx[cpu] + 1) % P_RECORD_PER_CPU;
+			return array[idx];
+		}
 		/* nessun publication record libero: tento di diventare un combiner */
 		fc_dl_sl_wait_response(p);
 	}
@@ -454,8 +453,9 @@ static pub_record *get_pub_record(fc_dl_skiplist_t *p, int cpu){
  * \param [in] len numero di nodi della skiplist preallocati
  * \return 0 in caso di successo, -1 altrimenti
  */
-void fc_dl_sl_init(void *s, int nproc){
+void fc_dl_sl_init(void *s, int nproc, int (*cmp_dl)(__u64 a, __u64 b)){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
+	p->cmp_dl = cmp_dl;
 	unsigned int i, j;
 
 	/* creazione skiplist e nodo di testa */
@@ -471,17 +471,20 @@ void fc_dl_sl_init(void *s, int nproc){
 	/* preallocazione di nproc nodi e inizializzazione array mapping */
 	for(i = 0; i < nproc; i++){
 		p->list->rq_to_node[i] = (struct fc_dl_sl_node *)calloc(1, sizeof(*p->list->rq_to_node[i]));
+		p->list->rq_to_node[i]->level = -1;
 		p->list->rq_to_node[i]->rq_idx = i;
 	}
 
 	/* salvataggio dimensione skiplist */
 	p->list->rq_num = nproc;
 
+#if 0
 	/* precaricamento skiplist con deadline fittizie */
-	fc_dl_sl_init_load(p->list);
+	fc_dl_sl_init_load(p->list, p->cmp_dl);
+#endif
 
 	/* inizializzazione lock */
-	pthread_mutex_init(&p->lock, NULL);
+	pthread_spin_init(&p->lock, PTHREAD_PROCESS_SHARED);
 
 	/* creazione publication_list */
 	p->p_list = create_publication_list();
@@ -492,6 +495,7 @@ void fc_dl_sl_init(void *s, int nproc){
 		p->p_record_array[i] = (pub_record **)calloc(P_RECORD_PER_CPU, sizeof(*p->p_record_array[i]));
 		for(j = 0; j < P_RECORD_PER_CPU; j++)
 			p->p_record_array[i][j] = create_publication_record();
+		p->p_record_idx = (int *)calloc(nproc, sizeof(*p->p_record_idx));
 	}
 }
 
@@ -500,9 +504,9 @@ void fc_dl_sl_cleanup(void *s){
 	unsigned int i, j;
 
 	/* evasione richieste pendenti */
-	pthread_mutex_lock(&p->lock);
+	pthread_spin_lock(&p->lock);
 	fc_dl_sl_do_combiner(p);
-	pthread_mutex_unlock(&p->lock);
+	pthread_spin_unlock(&p->lock);
 
 	/* distruzione nodi skiplist */
 	for(i = 0; i < p->list->rq_num; i++)
@@ -515,7 +519,7 @@ void fc_dl_sl_cleanup(void *s){
 	free(p->list->rq_to_node);
 
 	/* distruzione lock */
-	pthread_mutex_destroy(&p->lock);
+	pthread_spin_destroy(&p->lock);
 
 	/* distruzione publication records */
 	for(i = 0; i < p->list->rq_num; i++){
@@ -547,6 +551,7 @@ int fc_dl_sl_preempt(void *s, int cpu, __u64 dline, int is_valid){
 	/* pubblicazione publication record */
 	enqueue_publication_record(p->p_list, r);
 
+	/* FIXME: non serve un'attesa, è un'operazione di modifica */
 	/* attesa evasione richiesta */
 	/* nessuna attesa: si tenta di diventare combiner, se non si riesce si ritorna */
 	fc_dl_sl_wait_response(p/*, r*/);
@@ -557,98 +562,86 @@ int fc_dl_sl_preempt(void *s, int cpu, __u64 dline, int is_valid){
 	return res;
 }
 
-int fc_dl_sl_finish(void *s, int cpu, __u64 dline, int is_valid){
-	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
-	int res;
-
-	/* creazione publication record */
-	pub_record *r = get_pub_record(p, cpu);
-	r->req = FIN;
-	r->par.finish_p.cpu = cpu;
-	r->par.finish_p.dline = dline;
-	r->par.finish_p.is_valid = is_valid;
-	UNSET_READY(r);
-
-	/* pubblicazione publication record */
-	enqueue_publication_record(p->p_list, r);
-
-	/* attesa evasione richiesta */
-	/* nessuna attesa: si tenta di diventare combiner, se non si riesce si ritorna */
-	fc_dl_sl_wait_response(p/*, r*/);
-
-	/* lettura risultato */
-	res = r->res.finish_r.res;
-
-	return res;
-}
-
-/*
- * attenzione: poichè nel prototipo della funzione data_find()
- * del framework di simulazione non è previsto il parametro int cpu
- * non sappiamo da quale thread (processore) proviene la richiesta di
- * effettuare una find. Non si può pertanto sapere quale publication_record
- * preallocato utilizzare, quindi se ne alloca uno al volo che viene
- * deallocato prima di tornare il risultato
- * La funzione blocca il thread finchè non ottiene il risultato, ristrutturare
- */
 int fc_dl_sl_find(void *s){
-#if 0
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
-	__u64 res;
+	pub_record *rec;
+	__u64 candidate_dline = 0;
+	__u64 data_struct_dline = 0;
+	int candidate_cpu = -1;
+	int data_struct_cpu = -1;
+	
+	/* previsione migliore cpu dalla scansione lista */
+	rec = p->p_list->head;		/* lettura atomica (vedi old_dl_sl_find) */
+	while(rec){
+		/* il combiner thread potrebbe, nel frattempo, apportare le modifiche */
+		if(!IS_READY(rec))
+			switch(rec->req){
+				case PREEMPT:
+						if(candidate_cpu == -1 || p->cmp_dl(rec->par.preempt_p.dline, candidate_dline)){
+							candidate_cpu = rec->par.preempt_p.cpu;
+							candidate_dline = rec->par.preempt_p.dline;
+						}
+					break;
+			}
+		rec = rec->next;
+	}
 
-	/* creazione publication record */
-	pub_record *r = create_publication_record();
-	r->req = FIND_MIN;
-	UNSET_READY(r);
+	/* lettura migliore cpu dalla struttura dati */
+	data_struct_cpu = old_fc_dl_sl_find(s);
+	if(data_struct_cpu >= 0)
+		data_struct_dline = p->list->rq_to_node[data_struct_cpu]->dline;
 
-	/* pubblicazione publication record */
-	enqueue_publication_record(p->p_list, r);
-
-	/* attesa evasione richiesta */
-	fc_dl_sl_wait_response(p, r);
-
-	/* lettura risultato */
-	res = r->res.find_min_r.res;
-
-	/* distruzione publication record */
-	destroy_publication_record(r);
-
-	return res;
-#endif
-	return 1;
+	/* confronto */
+	if(candidate_dline > 0 && data_struct_dline > 0)
+		return p->cmp_dl(candidate_dline, data_struct_dline) ? candidate_cpu : data_struct_cpu;
+	if(candidate_dline > 0)
+		return candidate_cpu;
+	else
+		return data_struct_cpu;
 }
 
 void fc_dl_sl_load(void *s, FILE *f){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
 
-	pthread_mutex_lock(&p->lock);
+	pthread_spin_lock(&p->lock);
 	old_fc_dl_sl_load(s, f);
-	pthread_mutex_unlock(&p->lock);
+	pthread_spin_unlock(&p->lock);
 }
 
 void fc_dl_sl_save(void *s, FILE *f){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
 	
-	pthread_mutex_lock(&p->lock);
+	pthread_spin_lock(&p->lock);
 	old_fc_dl_sl_save(s, f);
-	pthread_mutex_unlock(&p->lock);
+	pthread_spin_unlock(&p->lock);
 }
 
 void fc_dl_sl_print(void *s, int nproc){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
 	
-	pthread_mutex_lock(&p->lock);
+	pthread_spin_lock(&p->lock);
 	old_fc_dl_sl_print(s, nproc);
-	pthread_mutex_unlock(&p->lock);
+	pthread_spin_unlock(&p->lock);
 }
 
 int fc_dl_sl_check(void *s, int nproc){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
 	int res;
 	
-	pthread_mutex_lock(&p->lock);
+	pthread_spin_lock(&p->lock);
 	res = old_fc_dl_sl_check(s, nproc);
-	pthread_mutex_unlock(&p->lock);
+	pthread_spin_unlock(&p->lock);
+
+	return res;
+}
+
+int fc_dl_sl_check_cpu(void *s, int cpu, __u64 dline){
+	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
+	int res;
+	
+	pthread_spin_lock(&p->lock);
+	res = old_fc_dl_sl_check_cpu(s, cpu, dline);
+	pthread_spin_unlock(&p->lock);
 
 	return res;
 }
@@ -658,11 +651,12 @@ const struct data_struct_ops fc_dl_skiplist_ops = {
 	.data_init = fc_dl_sl_init,
 	.data_cleanup = fc_dl_sl_cleanup,
 	.data_preempt = fc_dl_sl_preempt,
-	.data_finish = fc_dl_sl_finish,
+	.data_finish = fc_dl_sl_preempt,
 	.data_find = fc_dl_sl_find,
 	.data_max = fc_dl_sl_find,
 	.data_load = fc_dl_sl_load,
 	.data_save = fc_dl_sl_save,
 	.data_print = fc_dl_sl_print,
 	.data_check = fc_dl_sl_check,
+	.data_check_cpu = fc_dl_sl_check_cpu
 };

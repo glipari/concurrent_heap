@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <inttypes.h>
 #include <linux/types.h>
 #include <time.h>
@@ -22,7 +21,7 @@ struct dl_sl_node{
 	/*! \brief deadline del task */
 	__u64 dline;
 	/*! \brief Livello del nodo */
-	unsigned int level;
+	int level;
 	/*! \brief Puntatori ai nodi successivi nei vari livelli */
 	struct dl_sl_node *next[MAX_LEVEL];
 	/*! \brief Puntatori ai nodi precedenti nei vari livelli */
@@ -44,6 +43,7 @@ struct dl_sl_node{
  * \param [in] b deadline 2
  * \return torna 1 se a > b, 0 se a == b, -1 se a < b 
  */
+#if 0
 static inline int compare_dline(const __u64 a, const __u64 b){
 	if(a > b)
 		return 1;
@@ -51,6 +51,7 @@ static inline int compare_dline(const __u64 a, const __u64 b){
 		return -1;
 	return 0;
 }
+#endif
 
 /*! \brief Sgancia un nodo dalla skiplist
  *
@@ -79,6 +80,9 @@ static inline __u64 dl_sl_detach(struct dl_sl *list, struct dl_sl_node *p){
 	while(!list->head->next[list->level] && list->level > 0)
 		list->level--;
 
+	/* si marca il nodo come sganciato dalla skiplist */
+	p->level = -1;
+
 	return p->dline;
 }
 
@@ -96,6 +100,10 @@ static __u64 dl_sl_remove_idx(struct dl_sl *list, const unsigned int rq_idx){
 	
 	/* puntatore al nodo */
 	p = list->rq_to_node[rq_idx];
+
+	/* nodo non inserito nella skiplist */
+	if(p->level < 0)
+		return 0;
 
 	/* sgancio del nodo dalla skiplist */
 	return dl_sl_detach(list, p);
@@ -132,7 +140,7 @@ static inline unsigned int dl_sl_rand_level(unsigned int *seed, unsigned int max
  * \param [in] t puntatore al task da inserire
  * \return 0 in caso di successo, -1 altrimenti
  */
-static int dl_sl_insert(struct dl_sl *list, const unsigned int rq_idx, __u64 dline){
+static int dl_sl_insert(struct dl_sl *list, const unsigned int rq_idx, __u64 dline, int (*cmp_dl)(__u64 a, __u64 b)){
 	struct dl_sl_node *p;
 	struct dl_sl_node *update[MAX_LEVEL];
 	struct dl_sl_node *new_node;
@@ -158,9 +166,9 @@ static int dl_sl_insert(struct dl_sl *list, const unsigned int rq_idx, __u64 dli
 		}
 		
 		/* abbiamo un elemento davanti, lo confrontiamo con l'elemento da inserire */
-		cmp_res = compare_dline(p->next[level]->dline, new_node->dline);
+		cmp_res = cmp_dl(p->next[level]->dline, new_node->dline);
 		
-		if(cmp_res < 0)		/* se l'elemento esaminato è minore del nuovo si prosegue in orizzontale */
+		if(cmp_res > 0)		/* se l'elemento esaminato è minore del nuovo si prosegue in orizzontale */
 			p = p->next[level];
 		else				/* altrimenti si scende un livello */
 			level--;
@@ -187,14 +195,14 @@ static int dl_sl_insert(struct dl_sl *list, const unsigned int rq_idx, __u64 dli
 	return 0;
 }
 
-void dl_sl_init_load(struct dl_sl *list){
+void dl_sl_init_load(struct dl_sl *list, int (*cmp_dl)(__u64 a, __u64 b)){
 	unsigned int i;
 	__u64 dline;
 
-	memset(&dline, 255, sizeof(dline));
+	dline = MAX_DL;
 	
 	for(i = 0; i < list->rq_num; i++)
-		dl_sl_insert(list, i, dline);
+		dl_sl_insert(list, i, dline, cmp_dl);
 }
 
 /************************************
@@ -214,13 +222,15 @@ void dl_sl_init_load(struct dl_sl *list){
  * \param [in] len numero di nodi della skiplist preallocati
  * \return 0 in caso di successo, -1 altrimenti
  */
-void dl_sl_init(void *s, int nproc){
+void dl_sl_init(void *s, int nproc, int (*cmp_dl)(__u64 a, __u64 b)){
 	dl_skiplist_t *p = (dl_skiplist_t *)s;
 	unsigned int i = 0;
 
 	/* creazione skiplist e nodo di testa */
 	p->list = (struct dl_sl *)calloc(sizeof(struct dl_sl), 1);
+	p->cmp_dl = cmp_dl;
 	p->list->head = (struct dl_sl_node *)calloc(sizeof(struct dl_sl_node), 1);
+	p->list->head->rq_idx = -1;
 
 	/* salvataggio seme generatore pseudo-random */
 	p->list->seed = time(NULL);
@@ -231,14 +241,17 @@ void dl_sl_init(void *s, int nproc){
 	/* preallocazione di nproc nodi e inizializzazione array mapping */
 	for(i = 0; i < nproc; i++){
 		p->list->rq_to_node[i] = (struct dl_sl_node *)calloc(sizeof(struct dl_sl_node), 1);
+		p->list->rq_to_node[i]->level = -1;
 		p->list->rq_to_node[i]->rq_idx = i;
 	}
 
 	/* salvataggio dimensione skiplist */
 	p->list->rq_num = nproc;
 
+#if 0
 	/* precaricamento skiplist con deadline fittizie */
-	dl_sl_init_load(p->list);
+	dl_sl_init_load(p->list, p->cmp_dl);
+#endif
 
 	/* inizializzazione lock */
 	pthread_rwlock_init(&p->list->lock, NULL);
@@ -265,42 +278,35 @@ void dl_sl_cleanup(void *s){
 	free(p->list);
 }
 
-/* is_valid non è utilizzato */
 int dl_sl_preempt(void *s, int cpu, __u64 dline, int is_valid){
 	dl_skiplist_t *p = (dl_skiplist_t *)s;
-	__u64 old_dline;
 
 	pthread_rwlock_wrlock(&p->list->lock);
 
-	old_dline = dl_sl_remove_idx(p->list, cpu);
-	if(dl_sl_insert(p->list, cpu, dline) < 0){
-		fprintf(stderr, "errore inserimento skiplist");
-		exit(-1);
-	}
+	dl_sl_remove_idx(p->list, cpu);
+	if(is_valid)
+		dl_sl_insert(p->list, cpu, dline, p->cmp_dl);
 
 	pthread_rwlock_unlock(&p->list->lock);
 
 	return 0;
 }
 
+#if 0
 int dl_sl_finish(void *s, int cpu, __u64 dline, int is_valid){
 	dl_skiplist_t *p = (dl_skiplist_t *)s;
-	__u64 old_dline, fake_dline;
-
-	memset(&fake_dline, 255, sizeof(fake_dline));
 
 	pthread_rwlock_wrlock(&p->list->lock);
 
-	old_dline = dl_sl_remove_idx(p->list, cpu);
+	dl_sl_remove_idx(p->list, cpu);
 	if(is_valid)
-		dl_sl_insert(p->list, cpu, dline);
-	else
-		dl_sl_insert(p->list, cpu, fake_dline);
+		dl_sl_insert(p->list, cpu, dline, p->cmp_dl);
 
 	pthread_rwlock_unlock(&p->list->lock);
 
 	return 0;
 }
+#endif
 
 /*
  * e' possibile implementare qui una ricerca lineare del primo nodo da sganciare nel caso
@@ -308,20 +314,21 @@ int dl_sl_finish(void *s, int cpu, __u64 dline, int is_valid){
  */
 int dl_sl_find(void *s){
 	dl_skiplist_t *p = (dl_skiplist_t *)s;
-	int temp;
+	int cpu = -1;
 
 	pthread_rwlock_rdlock(&p->list->lock);
 
-	temp = p->list->head->next[0]->rq_idx;
+	if(p->list->head->next[0])
+		cpu = p->list->head->next[0]->rq_idx;
 
 	pthread_rwlock_unlock(&p->list->lock);
 
-	return temp;
+	return cpu;
 }
 
 /* ancora da implementare */
 void dl_sl_load(void *s, FILE *f){
-	dl_skiplist_t *p = (dl_skiplist_t *)s;
+	//dl_skiplist_t *p = (dl_skiplist_t *)s;
 }
 
 void dl_sl_save(void *s, FILE *f){
@@ -331,12 +338,25 @@ void dl_sl_save(void *s, FILE *f){
 
 	pthread_rwlock_rdlock(&p->list->lock);
 
+	fprintf(f, "\n----Skiplist----\n");
+
+	/* lista nodi */
 	for(i = p->list->level; i >= 0; i--){
 		fprintf(f, "%u:\t", i);
 		for(node = p->list->head->next[i]; node; node = node->next[i])
 			fprintf(f, "%llu ", node->dline);
 		fprintf(f, "\n");
 	}
+
+	/* lista CPU - nodi */
+	for(i = 0; i < p->list->rq_num; i++)
+		if(p->list->rq_to_node[i]->level == -1)
+			fprintf(f, "[%d]:\tout of list\n", i);
+		else
+			fprintf(f, "[%d]:\t%llu\n", i, p->list->rq_to_node[i]->dline);
+	fprintf(f, "\n");
+
+	fprintf(f, "----End Skiplist----\n\n");	
 
 	pthread_rwlock_unlock(&p->list->lock);
 }
@@ -349,7 +369,7 @@ void dl_sl_print(void *s, int nproc){
 int dl_sl_check(void *s, int nproc){
 	dl_skiplist_t *p = (dl_skiplist_t *)s;
 	struct dl_sl_node *node, *next_node, *prev_node;
-	unsigned int i, max_level;
+	unsigned int i, max_level = 0;
 	int flag = 1;
 
 	pthread_rwlock_rdlock(&p->list->lock);
@@ -367,13 +387,15 @@ int dl_sl_check(void *s, int nproc){
 	}
 
 	/* check numero elementi nella skiplist */
+#if 0
 	node = p->list->head;
-	for(i = 0; i < p->list->rq_num; i++)
+	for(i = 0; node && i < p->list->rq_num; i++)
 		node = node->next[0];
 	if(i != p->list->rq_num){
 		fprintf(stderr, "errore numero elementi skiplist");
 		flag = 0;
 	}
+#endif
 
 	/* 
 	 * check corretto ordinamento deadline
@@ -389,7 +411,7 @@ int dl_sl_check(void *s, int nproc){
 		
 		/* check */
 		while((next_node = node->next[i])){
-			if(compare_dline(node->dline, next_node->dline) > 0)
+			if(p->cmp_dl(node->dline, next_node->dline) < 0)
 				flag = 0;
 			node = next_node;
 		}
@@ -406,8 +428,8 @@ int dl_sl_check(void *s, int nproc){
 			node = node->next[i];
 			
 		/* check */
-		while(prev_node = node->prev[i]){
-			if(compare_dline(prev_node->dline, node->dline) > 0)
+		while((prev_node = node->prev[i])){
+			if(p->cmp_dl(prev_node->dline, node->dline) < 0)
 				flag = 0;
 			node = prev_node;
 		}
@@ -422,16 +444,39 @@ int dl_sl_check(void *s, int nproc){
 	return flag;
 }
 
+int dl_sl_check_cpu (void *s, int cpu, __u64 dline){
+	dl_skiplist_t *p = (dl_skiplist_t *)s;
+	struct dl_sl_node *node;
+	int flag = 1;
+
+	pthread_rwlock_rdlock(&p->list->lock);
+
+	node = p->list->rq_to_node[cpu];
+	if(!node)
+		return 0;
+	
+	if(!dline && node->level != -1)
+		flag = 0;
+
+	if(dline > 0 && dline != node->dline)
+		flag = 0;
+
+	pthread_rwlock_unlock(&p->list->lock);
+	
+	return flag;
+}
+
 /* mapping per le chiamate astratte alle funzioni della struttura dati */
 const struct data_struct_ops dl_skiplist_ops = {
 	.data_init = dl_sl_init,
 	.data_cleanup = dl_sl_cleanup,
 	.data_preempt = dl_sl_preempt,
-	.data_finish = dl_sl_finish,
+	.data_finish = dl_sl_preempt,
 	.data_find = dl_sl_find,
 	.data_max = dl_sl_find,
 	.data_load = dl_sl_load,
 	.data_save = dl_sl_save,
 	.data_print = dl_sl_print,
 	.data_check = dl_sl_check,
+	.data_check_cpu = dl_sl_check_cpu
 };

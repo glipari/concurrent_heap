@@ -2,6 +2,7 @@
  *
  * Copyright (c) 2008, Bjoern B. Brandenburg <bbb [at] cs.unc.edu>
  * Modified by Juri Lelli <juri.lelli [at] gmail.com>, 2012
+ * Modified by Fabio Falzoi <falzoi [at] feanor.sssup.it>, 2012
  *
  * All rights reserved.
  *
@@ -31,7 +32,9 @@
 
 #ifndef __RQ_HEAP_H__
 #define __RQ_HEAP_H__
+
 #include <limits.h>
+#include <stdlib.h>
 
 #define NOT_IN_HEAP UINT_MAX
 
@@ -54,7 +57,8 @@ struct rq_heap {
 	struct rq_heap_node*	next;
 };
 
-/* item comparison function:
+/* 
+ * item comparison function:
  * return 1 if a has higher prio than b, 0 otherwise
  */
 typedef int (*rq_heap_prio_t)(struct rq_heap_node* a, struct rq_heap_node* b);
@@ -89,7 +93,10 @@ static inline void rq_heap_node_init(struct rq_heap_node* h, void* value)
 
 static inline void* rq_heap_node_value(struct rq_heap_node* h)
 {
-	return h->value;
+	if(h)
+		return h->value;
+	else
+		return NULL;
 }
 
 static inline int rq_heap_node_in_heap(struct rq_heap_node* h)
@@ -97,9 +104,14 @@ static inline int rq_heap_node_in_heap(struct rq_heap_node* h)
 	return h->degree != NOT_IN_HEAP;
 }
 
+/*
+ * we need to check min pointer, 'cause it's used as cache
+ * for earliest deadline task.
+ * Note that: if heap->min == NULL then heap->next == NULL
+ */
 static inline int rq_heap_empty(struct rq_heap* heap)
 {
-	return heap->head == NULL && heap->min == NULL;
+	return heap->head == NULL && heap->min == NULL && heap->next == NULL;
 }
 
 /* make child a subtree of root */
@@ -240,28 +252,34 @@ static inline struct rq_heap_node* __rq_heap_extract_min(rq_heap_prio_t higher_p
 static inline void rq_heap_insert(rq_heap_prio_t higher_prio, struct rq_heap* heap,
 			       struct rq_heap_node* node)
 {
-	struct rq_heap_node *min, *next;
+	struct rq_heap_node *next;
 	node->child  = NULL;
 	node->parent = NULL;
 	node->next   = NULL;
 	node->degree = 0;
-	if (heap->min && higher_prio(node, heap->min)) {
-		/* swap min cache */
-		min = heap->min;
-		min->child  = NULL;
-		min->parent = NULL;
-		min->next   = NULL;
-		min->degree = 0;
-		__rq_heap_union(higher_prio, heap, min);
-		heap->min   = node;
-	} else if (heap->next && higher_prio(node, heap->next)) {
-		/* swap next cache */
-		next = heap->next;
-		next->child  = NULL;
-		next->parent = NULL;
-		next->next   = NULL;
-		next->degree = 0;
-		__rq_heap_union(higher_prio, heap, next);
+
+	if (!heap->min || (heap->min && higher_prio(node, heap->min))) {
+		/* swap next cache if present */
+		if(heap->next){
+			next = heap->next;
+			next->child  = NULL;
+			next->parent = NULL;
+			next->next   = NULL;
+			next->degree = 0;
+			__rq_heap_union(higher_prio, heap, next);
+		}
+		heap->next	= heap->min;
+		heap->min		= node;
+	} else if (!heap->next || (heap->next && higher_prio(node, heap->next))) {
+		/* swap next cache if present */
+		if(heap->next){
+			next = heap->next;
+			next->child  = NULL;
+			next->parent = NULL;
+			next->next   = NULL;
+			next->degree = 0;
+			__rq_heap_union(higher_prio, heap, next);
+		}
 		heap->next   = node;
 	} else
 		__rq_heap_union(higher_prio, heap, node);
@@ -295,7 +313,9 @@ static inline void rq_heap_union(rq_heap_prio_t higher_prio,
 {
 	/* first insert any cached minima, if necessary */
 	__uncache_min(higher_prio, target);
+	__uncache_next(higher_prio, target);
 	__uncache_min(higher_prio, addition);
+	__uncache_next(higher_prio, addition);
 	__rq_heap_union(higher_prio, target, addition->head);
 	/* this is a destructive merge */
 	addition->head = NULL;
@@ -325,16 +345,34 @@ static inline struct rq_heap_node* rq_heap_take(rq_heap_prio_t higher_prio,
 	struct rq_heap_node *node;
 	if (!heap->min)
 		heap->min = __rq_heap_extract_min(higher_prio, heap);
-	if (!heap->next)
+	if (heap->min && !heap->next)
 		heap->next = __rq_heap_extract_min(higher_prio, heap);
 	node = heap->min;
 	heap->min = heap->next;
-	heap->next = __rq_heap_extract_min(higher_prio, heap);
+	if(heap->min)
+		heap->next = __rq_heap_extract_min(higher_prio, heap);
 	if (node)
 		node->degree = NOT_IN_HEAP;
 	return node;
 }
 
+static inline struct rq_heap_node* rq_heap_take_next(rq_heap_prio_t higher_prio,
+					  struct rq_heap* heap)
+{
+	struct rq_heap_node *node;
+	if (!heap->next)
+		heap->next = __rq_heap_extract_min(higher_prio, heap);
+	node = heap->next;
+	if(node){
+		heap->next = __rq_heap_extract_min(higher_prio, heap);
+		node->degree = NOT_IN_HEAP;
+	}
+	return node;
+}
+
+/*
+ * this function use ref field of node!!!
+ */
 static inline void rq_heap_decrease(rq_heap_prio_t higher_prio, struct rq_heap* heap,
 				 struct rq_heap_node* node)
 {
@@ -346,10 +384,6 @@ static inline void rq_heap_decrease(rq_heap_prio_t higher_prio, struct rq_heap* 
 	if (!node->ref)
 		return;
 	if (heap->min != node && heap->next != node) {
-		if (heap->min && higher_prio(node, heap->min))
-			__uncache_min(higher_prio, heap);
-		else if (heap->next && higher_prio(node, heap->next))
-			__uncache_next(higher_prio, heap);
 		/* bubble up */
 		parent = node->parent;
 		while (parent && higher_prio(node, parent)) {
@@ -368,7 +402,14 @@ static inline void rq_heap_decrease(rq_heap_prio_t higher_prio, struct rq_heap* 
 			node   = parent;
 			parent = node->parent;
 		}
-	} else if (heap->next == node && higher_prio(heap->next, heap->min)) {
+		/* if node's priority is now less than min and/or next we must uncache them */
+		if (heap->min && higher_prio(node, heap->min)){
+			__uncache_min(higher_prio, heap);
+			__uncache_next(higher_prio, heap);
+		}
+		else if (heap->next && higher_prio(node, heap->next))
+			__uncache_next(higher_prio, heap);
+	} else if (heap->next == node && higher_prio(heap->next, heap->min)) {	/* if node is "next" cached node we must compare it with min */
 			/* swap min and next */
 			tmp           = heap->min->value;
 			heap->min->value = heap->next->value;
@@ -383,6 +424,9 @@ static inline void rq_heap_decrease(rq_heap_prio_t higher_prio, struct rq_heap* 
 	}
 }
 
+/*
+ * this function use ref field of node!!!
+ */
 static inline void rq_heap_delete(rq_heap_prio_t higher_prio, struct rq_heap* heap,
 			       struct rq_heap_node* node)
 {
@@ -429,7 +473,7 @@ static inline void rq_heap_delete(rq_heap_prio_t higher_prio, struct rq_heap* he
 		heap->min = heap->next;
 		heap->next = __rq_heap_extract_min(higher_prio, heap);
 	} else 
-		heap->next = NULL;
+		heap->next = __rq_heap_extract_min(higher_prio, heap);
 	node->degree = NOT_IN_HEAP;
 }
 

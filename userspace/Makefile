@@ -5,20 +5,20 @@
 # EDE is the Emacs Development Environment.
 # http://cedet.sourceforge.net/ede.shtml
 #
-CFLAGS = -O3 #-g -pg
+CFLAGS = -Wall -O3 -g #-pg -fdump-rtl-expand
 
 top="$(CURDIR)"/
 ede_FILES=Project.ede Makefile
 
-main_SOURCES= rq_heap.h common_ops.h common_ops.c array_heap.h array_heap.c heap.h heap.c dl_skipist.h dl_skiplist.c fc_dl_skipist.h fc_dl_skiplist.c flat_combining.h flat_combining.c main.c
+main_SOURCES= common_ops.h common_ops.c rq_heap.h array_heap.h array_heap.c heap.h heap.c dl_skipist.h dl_skiplist.c fc_dl_skipist.h fc_dl_skiplist.c flat_combining.h flat_combining.c main.c
 main_OBJ= array_heap.o heap.o dl_skiplist.o main.o
 CC=gcc
 C_COMPILE=$(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 C_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
 C_LINK=$(CC) $(CFLAGS) $(LDFLAGS) -L.
-test_concurrent_SOURCES=array_heap.c heap.c dl_skiplist.c fc_dl_skiplist.c flat_combining.c test_concurrent.c common_ops.c
+test_concurrent_SOURCES=common_ops.c array_heap.c heap.c dl_skiplist.c fc_dl_skiplist.c flat_combining.c test_concurrent.c
 LDFLAGS=-pthread
-test_concurrent_OBJ= array_heap.o heap.o dl_skiplist.o fc_dl_skiplist.o flat_combining.o test_concurrent.o common_ops.o
+test_concurrent_OBJ= common_ops.o array_heap.o heap.o dl_skiplist.o fc_dl_skiplist.o flat_combining.o test_concurrent.o
 VERSION=1.0
 DISTDIR=$(top)fine_grain_lock-$(VERSION)
 top_builddir = 

@@ -11,11 +11,6 @@
 #include "array_heap.h"
 #include "common_ops.h"
 
-static inline int __dl_time_before(__u64 a, __u64 b)
-{
-        return (__s64)(a - b) < 0;
-}
-
 static inline int parent(int i) {
         return (i - 1) >> 1;
 }

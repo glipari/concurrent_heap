@@ -9,6 +9,7 @@
 /* doubly-linked skiplist */
 typedef struct _dl_skiplist {
 	struct dl_sl *list;
+	int (*cmp_dl)(__u64 a, __u64 b);
 } dl_skiplist_t;
 
 struct dl_sl{
@@ -34,7 +35,7 @@ struct dl_sl{
   pthread_rwlock_t lock;
 };
 
-void dl_sl_init(void *s, int nproc);
+void dl_sl_init(void *s, int nproc, int (*cmp_dl)(__u64 a, __u64 b));
 void dl_sl_cleanup(void *s);
 
 /*

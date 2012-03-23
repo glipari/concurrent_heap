@@ -11,9 +11,11 @@
 /* doubly-linked skiplist */
 typedef struct _fc_dl_skiplist {
 	struct fc_dl_sl *list;
-  pthread_mutex_t lock;
+	int (*cmp_dl)(__u64 a, __u64 b);
+  pthread_spinlock_t lock;
   pub_list *p_list;
   pub_record ***p_record_array;
+	/* array di indici dell'ultimo publication record utilizzato */
   int *p_record_idx;
 } fc_dl_skiplist_t;
 
@@ -38,7 +40,7 @@ struct fc_dl_sl{
 	unsigned int rq_num;
 };
 
-void fc_dl_sl_init(void *s, int nproc);
+void fc_dl_sl_init(void *s, int nproc, int (*cmp_dl)(__u64 a, __u64 b));
 void fc_dl_sl_cleanup(void *s);
 
 /*
@@ -64,5 +66,6 @@ void fc_dl_sl_save(void *s, FILE *f);
 void fc_dl_sl_print(void *s, int nproc);
 
 int fc_dl_sl_check(void *s, int nproc);
+int fc_dl_sl_check_cpu(void *s, int cpu, __u64 dline);
 
 #endif
