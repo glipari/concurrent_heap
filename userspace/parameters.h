@@ -73,7 +73,7 @@
  */
 //#define MEASURE_FIND_UNLOCK
 
-#define NPROCESSORS    4
+#define NPROCESSORS    48
 #define NCYCLES        1000 /* 1 cycle = 10ms simulated time */
 #define DMIN           10
 #define DMAX           100
