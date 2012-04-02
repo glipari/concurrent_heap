@@ -10,6 +10,7 @@
 #include <linux/types.h>
 #include "array_heap.h"
 #include "common_ops.h"
+#include "parameters.h"
 
 static inline int parent(int i) {
         return (i - 1) >> 1;

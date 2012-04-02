@@ -6,6 +6,7 @@
 #include <pthread.h>
 
 #include "common_ops.h"
+#include "parameters.h"
 #include "flat_combining.h"
 #include "fc_dl_skiplist.h"
 

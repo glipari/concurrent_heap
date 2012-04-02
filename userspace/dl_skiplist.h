@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <linux/types.h>
 #include "common_ops.h"
+#include "measure.h"
 
 /* doubly-linked skiplist */
 typedef struct _dl_skiplist {

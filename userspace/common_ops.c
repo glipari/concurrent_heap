@@ -1,15 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <unistd.h>
 
 #include "common_ops.h"
 #include "rq_heap.h"
-
-#define PUSH_MAX_TRIES		3	/* MAX TRIES FOR PUSH */
-#define PULL_MAX_TRIES		3	/* MAX TRIES FOR PULL */
-
-//#define DEBUG
-//#define VERBOSE
+#include "measure.h"
+#include "parameters.h"
 
 /*
  * __dl_time_before - compare two deadlines, return > 0 if 
@@ -220,7 +217,13 @@ struct rq_heap_node *rq_take (struct rq *rq)
 	/* earliest cache update */
 	rq->earliest = rq->next;
 	/* update push global data structure */
+#ifdef MEASURE_PUSH_PREEMPT
+	COMMON_MEASURE_START(push_preempt)
+#endif
 	dso->data_preempt(push_data_struct, rq->cpu, rq->earliest, rq->earliest != 0 ? 1 : 0);
+#ifdef MEASURE_PUSH_PREEMPT
+	COMMON_MEASURE_END(push_preempt)
+#endif
 
 	/* next cache update */
 	ns_next = rq_heap_peek_next(task_compare, &rq->heap);
@@ -230,7 +233,13 @@ struct rq_heap_node *rq_take (struct rq *rq)
 	} else
 		rq->next = 0;
 	/* update pull global data structure */
+#ifdef MEASURE_PULL_PREEMPT
+	COMMON_MEASURE_START(pull_preempt)
+#endif
 	dso->data_preempt(pull_data_struct, rq->cpu, rq->next, rq->next != 0 ? 1 : 0);
+#ifdef MEASURE_PULL_PREEMPT
+	COMMON_MEASURE_END(pull_preempt)
+#endif
 
 #ifdef VERBOSE
 	fprintf(stderr, "rq idx: %d\n", rq->cpu);
@@ -276,7 +285,13 @@ struct rq_heap_node *rq_take_next (struct rq *rq)
 	} else
 		rq->next = 0;
 	/* update pull global data structure */
+#ifdef MEASURE_PULL_PREEMPT
+	COMMON_MEASURE_START(pull_preempt)
+#endif
 	dso->data_preempt(pull_data_struct, rq->cpu, rq->next, rq->next != 0 ? 1 : 0);
+#ifdef MEASURE_PULL_PREEMPT
+	COMMON_MEASURE_END(pull_preempt)
+#endif
 
 #ifdef VERBOSE
 	fprintf(stderr, "rq idx: %d\n", rq->cpu);
@@ -316,13 +331,31 @@ void add_task_rq(struct rq* rq, struct task_struct* task)
 		rq->next = old_earliest;
 		rq->earliest = task_dl;
 		/* update push global data structure */
+#ifdef MEASURE_PUSH_PREEMPT
+		COMMON_MEASURE_START(push_preempt)
+#endif
 		dso->data_preempt(push_data_struct, rq->cpu, rq->earliest, rq->earliest != 0 ? 1 : 0);
+#ifdef MEASURE_PUSH_PREEMPT
+		COMMON_MEASURE_END(push_preempt)
+#endif
 		/* update pull global data structure */
+#ifdef MEASURE_PULL_PREEMPT
+		COMMON_MEASURE_START(pull_preempt)
+#endif
 		dso->data_preempt(pull_data_struct, rq->cpu, rq->next, rq->next != 0 ? 1 : 0);
+#ifdef MEASURE_PULL_PREEMPT
+		COMMON_MEASURE_END(pull_preempt)
+#endif
 	} else if (!rq->overloaded || __dl_time_before(task_dl, old_next)){
 		rq->next = task_dl;
 		/* update pull global data structure */
+#ifdef MEASURE_PULL_PREEMPT
+		COMMON_MEASURE_START(pull_preempt)
+#endif
 		dso->data_preempt(pull_data_struct, rq->cpu, rq->next, rq->next != 0 ? 1 : 0);
+#ifdef MEASURE_PULL_PREEMPT
+		COMMON_MEASURE_END(pull_preempt)
+#endif
 	}
 #ifdef VERBOSE
 	fprintf(stderr, "rq idx: %d\n", rq->cpu);
@@ -351,8 +384,15 @@ static int find_earlier_rq(){
 
 #ifdef VERBOSE
 	fprintf(stderr, "asking pull data structure for a runqueue index to pull task from\n");
-#endif	
+#endif
+#ifdef MEASURE_PULL_FIND
+	COMMON_MEASURE_START(pull_find)
+#endif
 	best_cpu = dso->data_find(pull_data_struct);
+#ifdef MEASURE_PULL_FIND
+	COMMON_MEASURE_END(pull_find)
+	COMMON_MEASURE_REGISTER_OUTCOME(pull_find, best_cpu, -1)
+#endif
 #ifdef VERBOSE
 	fprintf(stderr, "pull data structure returns index: %d\n", best_cpu);
 #endif
@@ -508,8 +548,15 @@ static int find_later_rq(struct task_struct *task){
 
 #ifdef VERBOSE
 	fprintf(stderr, "asking push data structure for a runqueue index to push task to\n");
-#endif	
+#endif
+#ifdef MEASURE_PUSH_FIND
+	COMMON_MEASURE_START(push_find)
+#endif
 	best_cpu = dso->data_find(push_data_struct);
+#ifdef MEASURE_PUSH_FIND
+	COMMON_MEASURE_END(push_find)
+	COMMON_MEASURE_REGISTER_OUTCOME(push_find, best_cpu, -1)
+#endif	
 #ifdef VERBOSE
 	fprintf(stderr, "push data structure return index: %d\n", best_cpu);
 #endif

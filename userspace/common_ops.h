@@ -6,8 +6,6 @@
 #include <pthread.h>
 #include "rq_heap.h"
 
-#define MAX_DL	~0ULL
-
 struct data_struct_ops {
 	void (*data_init) (void *s, int nproc, int (*cmp_dl)(__u64 a, __u64 b));
 	void (*data_cleanup) (void *s);

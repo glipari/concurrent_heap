@@ -6,6 +6,7 @@
 #include <pthread.h>
 
 #include "common_ops.h"
+#include "parameters.h"
 #include "dl_skiplist.h"
 
 /*! \brief Numero massimo di livelli della skiplist
@@ -314,14 +315,38 @@ int dl_sl_finish(void *s, int cpu, __u64 dline, int is_valid){
  */
 int dl_sl_find(void *s){
 	dl_skiplist_t *p = (dl_skiplist_t *)s;
+	struct dl_sl_node *n;
 	int cpu = -1;
 
-	pthread_rwlock_rdlock(&p->list->lock);
+#ifdef MEASURE_FIND_LOCK
+	COMMON_MEASURE_START(find_lock)
+#endif
+	//pthread_rwlock_rdlock(&p->list->lock);
+#ifdef MEASURE_FIND_LOCK
+	COMMON_MEASURE_END(find_lock)
+#endif
 
+	/*
+	 * we don't need to take a lock:
+	 * if p->list->head->next[0] is not
+	 * NULL, then we can fetch a node
+	 * address, and that node will not
+	 * be freed until the simulation ends.
+	 */ 
+	n = p->list->head->next[0];
+	if(n)
+		cpu = n->rq_idx;
+/*
 	if(p->list->head->next[0])
 		cpu = p->list->head->next[0]->rq_idx;
-
-	pthread_rwlock_unlock(&p->list->lock);
+*/
+#ifdef MEASURE_FIND_UNLOCK
+	COMMON_MEASURE_START(find_unlock)
+#endif
+	//pthread_rwlock_unlock(&p->list->lock);
+#ifdef MEASURE_FIND_UNLOCK
+	COMMON_MEASURE_END(find_unlock)
+#endif
 
 	return cpu;
 }

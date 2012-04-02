@@ -4,6 +4,7 @@
 
 #include "heap.h"
 #include "common_ops.h"
+#include "parameters.h"
 
 #ifndef SEQUENTIAL 
 #define LOCK(h,x)                                                       \
