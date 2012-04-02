@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+#include <sched.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
@@ -40,6 +42,7 @@ pthread_t threads[NPROCESSORS];
 sem_t start_barrier_sem, end_barrier_sem;
 unsigned int barrier_count;
 int last_pid = 0; /* operations on this MUST be ATOMIC */
+int online_cpus;
 
 /*
  * global data structures for push
@@ -149,10 +152,10 @@ void signal_handler(int sig)
 	printf("\nEXITING!\n");
 
 	printf("----Push Data Structure----\n");
-	dso->data_print(push_data_struct, NPROCESSORS);
+	dso->data_print(push_data_struct, online_cpus);
 	printf("----Pull Data Structure----\n");
-	dso->data_print(pull_data_struct, NPROCESSORS);
-	for (i = 0; i < NPROCESSORS; i++) 
+	dso->data_print(pull_data_struct, online_cpus);
+	for (i = 0; i < online_cpus; i++) 
 		printf("Index %d, ID %ld\n", i, (threads[i] % 100));
 	exit(-1);
 }
@@ -164,7 +167,7 @@ void signal_handler(int sig)
 void *processor(void *arg)
 {
 	int index = *((int*)arg);
-	int i, is_valid = 0;
+	int i, is_valid = 0, res, cpu;
 	struct rq rq;
 	struct rq_heap_node *min, *node;
 	struct task_struct *min_tsk, *new_tsk;
@@ -172,9 +175,18 @@ void *processor(void *arg)
 	struct timespec t_sleep, t_period;
 	FILE *log;
 	char log_name[LOGNAME_LEN];
+	cpu_set_t mask;
 
 	sprintf(log_name, "log-%d", index);
 	log = fopen(log_name, "w");
+
+	CPU_ZERO(&mask);
+	CPU_SET(index, &mask);
+	res = sched_setaffinity(0, sizeof(mask), &mask);
+	if (res != 0) {
+		fprintf(stderr, "cannot set processor %d affinity!\n", index);
+		exit(-1);
+	}
 
 	fprintf(log, "*****SIMULATION START*****\n\n");
 
@@ -187,7 +199,8 @@ void *processor(void *arg)
 	cpu_to_rq[index] = &rq;
 
 #ifdef DEBUG
-	fprintf(rq.log, "[%d]:\trq initialized\n", index);
+	cpu = sched_getcpu();
+	fprintf(rq.log, "[%d]:\trq initialized on cpu %d\n", index, cpu);
 #endif
 
 	__u64 min_dl = 0, new_dl;
@@ -197,7 +210,7 @@ void *processor(void *arg)
 	/* simulation start barrier */
 	__sync_fetch_and_add(&barrier_count, 1);
 
-	if(barrier_count == NPROCESSORS)
+	if(barrier_count == online_cpus)
 		sem_post(&start_barrier_sem);
 
 	sem_wait(&start_barrier_sem);
@@ -369,9 +382,9 @@ void *processor(void *arg)
 
 #ifdef DEBUG
 		printf("----Push Data Structure----\n");
-		dso->data_print(push_data_struct, NPROCESSORS);
+		dso->data_print(push_data_struct, online_cpus);
 		printf("----Pull Data Structure----\n");
-		dso->data_print(pull_data_struct, NPROCESSORS);
+		dso->data_print(pull_data_struct, online_cpus);
 #endif
 
 		/* sleep for remaining time in t_period */
@@ -443,9 +456,9 @@ void *checker(void *arg)
 		fprintf(stderr, "%d) Checker: OK!\r", ++count);
 
 		/* acquire locks */
-		if(k == NPROCESSORS)
+		if(k == online_cpus)
 			k = 0;
-		for(; k < NPROCESSORS; k++){
+		for(; k < online_cpus; k++){
 			/*
 			 * we have to wait the processor
 			 * for updating cpu_to_rq array
@@ -461,18 +474,18 @@ void *checker(void *arg)
 		 * updated cpu_to_rq,
 		 * retry
 		 */
-		if(k < NPROCESSORS)
+		if(k < online_cpus)
 			continue;
 
 #ifdef DEBUG
 		fprintf(error_log, "*****CHECKER OUTPUT - COUNT %d*****", count);
 
-		for(i = 0; i < NPROCESSORS; i++)
+		for(i = 0; i < online_cpus; i++)
 			rq_print(cpu_to_rq[i], error_log);
 #endif
 
 		/* check all runqueues */
-		for(i = 0; i < NPROCESSORS; i++)
+		for(i = 0; i < online_cpus; i++)
 			if(!rq_check(cpu_to_rq[i])){
 				fprintf(error_log, "\n***** rq_check found errors on runqueue %d *****\n\n", i);
 				rq_print(cpu_to_rq[i], error_log);
@@ -481,25 +494,25 @@ void *checker(void *arg)
 
 #ifdef DEBUG
 		fprintf(error_log, "*****PUSH DATA STRUCTURE****\n");
-		dso->data_save(push_data_struct, NPROCESSORS, error_log);
+		dso->data_save(push_data_struct, online_cpus, error_log);
 		fprintf(error_log, "*****END PUSH DATA STRUCTURE****\n\n");
 		fprintf(error_log, "*****PULL DATA STRUCTURE****\n");
-		dso->data_save(pull_data_struct, NPROCESSORS, error_log);
+		dso->data_save(pull_data_struct, online_cpus, error_log);
 		fprintf(error_log, "*****END PULL DATA STRUCTURE****\n\n");
 #endif
 
 		/* check all global data structures */
-		if (!dso->data_check(push_data_struct, NPROCESSORS)){
+		if (!dso->data_check(push_data_struct, online_cpus)){
 			fprintf(error_log, "\n***** data_check found errors on PUSH DATA STRUCTURE *****\n\n");
 			break;
 		}
-		if (!dso->data_check(pull_data_struct, NPROCESSORS)){
+		if (!dso->data_check(pull_data_struct, online_cpus)){
 			fprintf(error_log, "\n***** data_check found errors on PULL DATA STRUCTURE *****\n\n");
 			break;
 		}
 
 		/* check runqueues and global data structures consistency */
-		for(i = 0; i < NPROCESSORS; i++){
+		for(i = 0; i < online_cpus; i++){
 			dline = cpu_to_rq[i]->earliest;
 			if(!dso->data_check_cpu(push_data_struct, i, dline)){
 				fprintf(error_log, "\n***** data_check_cpu found errors on PUSH DATA STRUCTURE for runqueue #%d *****\n\n", i);
@@ -513,7 +526,7 @@ void *checker(void *arg)
 		}
 
 		/* release locks */
-		for(i = 0; i < NPROCESSORS; i++)
+		for(i = 0; i < online_cpus; i++)
 			rq_unlock(cpu_to_rq[i]);
 
 #ifdef DEBUG
@@ -592,6 +605,7 @@ int main(int argc, char **argv)
     int ind[NPROCESSORS];
     int i;
 
+    online_cpus = sysconf(_SC_NPROCESSORS_ONLN);
 #ifdef MEASURE
 		set_tsc_cost();
 #endif
@@ -606,18 +620,18 @@ int main(int argc, char **argv)
     		printf("Initializing the heap\n");
 		break;
 	    case ARRAY_HEAP:
-		dso->data_init(push_data_struct, NPROCESSORS, __dl_time_before);
-		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_after);
+		dso->data_init(push_data_struct, online_cpus, __dl_time_before);
+		dso->data_init(pull_data_struct, online_cpus, __dl_time_after);
     		printf("Initializing the array_heap\n");
 		break;
 	    case SKIPLIST:
-		dso->data_init(push_data_struct, NPROCESSORS, __dl_time_after);
-		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_before);
+		dso->data_init(push_data_struct, online_cpus, __dl_time_after);
+		dso->data_init(pull_data_struct, online_cpus, __dl_time_before);
 		printf("Initializing the skiplist\n");
 		break;
 	    case FC_SKIPLIST:
-		dso->data_init(push_data_struct, NPROCESSORS, __dl_time_after);
-		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_before);
+		dso->data_init(push_data_struct, online_cpus, __dl_time_after);
+		dso->data_init(pull_data_struct, online_cpus, __dl_time_before);
 		printf("Initializing the flat_combining_skiplist\n");
 		break;
 	    default:
@@ -636,14 +650,14 @@ int main(int argc, char **argv)
 		sem_init(&start_barrier_sem, 0, 0);
 		sem_init(&end_barrier_sem, 0, 0);
 
-    for (i = 0; i < NPROCESSORS; i++) {
+    for (i = 0; i < online_cpus; i++) {
         ind[i] = i;
         pthread_create(&threads[i], 0, processor, &ind[i]);
     }
 
     printf("Waiting for the end\n");
 
-    for (i = 0; i < NPROCESSORS; i++) {
+    for (i = 0; i < online_cpus; i++) {
         pthread_join(threads[i], 0);
 				printf("+++++++++++++++++++++++++++++++++\n");
         printf("Num Arrivals [%d]: %d\n", i, num_arrivals[i]);
