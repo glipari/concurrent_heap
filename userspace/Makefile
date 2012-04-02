@@ -10,19 +10,19 @@ CFLAGS = -Wall -O3 -g #-pg -fdump-rtl-expand
 top="$(CURDIR)"/
 ede_FILES=Project.ede Makefile
 
-main_SOURCES= parameters.h common_ops.h common_ops.c rq_heap.h cycle.h measure.h measure.c array_heap.h array_heap.c heap.h heap.c dl_skipist.h dl_skiplist.c fc_dl_skipist.h fc_dl_skiplist.c flat_combining.h flat_combining.c main.c
-main_OBJ= array_heap.o heap.o dl_skiplist.o main.o
+main_SOURCES= parameters.h common_ops.h common_ops.c rq_heap.h cycle.h measure.h measure.c array_heap.h array_heap.c heap.h heap.c dl_skipist.h dl_skiplist.c fc_dl_skipist.h fc_dl_skiplist.c flat_combining.h flat_combining.c bm_fc_skipist.h bm_fc_skiplist.c bm_flat_combining.h bm_flat_combining.c main.c
+main_OBJ= array_heap.o heap.o dl_skiplist.o fc_dl_skiplist.o flat_combining.o bm_fc_skiplist.o bm_flat_combining.o main.o
 CC=gcc
 C_COMPILE=$(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 C_DEPENDENCIES=-Wp,-MD,.deps/$(*F).P
 C_LINK=$(CC) $(CFLAGS) $(LDFLAGS) -L.
-test_concurrent_SOURCES=common_ops.c measure.c array_heap.c heap.c dl_skiplist.c fc_dl_skiplist.c flat_combining.c test_concurrent.c
+test_concurrent_SOURCES=common_ops.c measure.c array_heap.c heap.c dl_skiplist.c fc_dl_skiplist.c flat_combining.c bm_fc_skiplist.c bm_flat_combining.c test_concurrent.c
 LDFLAGS=-pthread
-test_concurrent_OBJ= common_ops.o measure.o array_heap.o heap.o dl_skiplist.o fc_dl_skiplist.o flat_combining.o test_concurrent.o
+test_concurrent_OBJ= common_ops.o measure.o array_heap.o heap.o dl_skiplist.o fc_dl_skiplist.o flat_combining.o bm_fc_skiplist.o bm_flat_combining.o test_concurrent.o
 VERSION=1.0
 DISTDIR=$(top)fine_grain_lock-$(VERSION)
 top_builddir = 
-DEP_FILES=.deps/common_ops.P .deps/measure.P .deps/heap.P .deps/array_heap.P .deps/dl_skiplist.P .deps/fc_dl_skiplist.P .deps/flat_combining.P .deps/test_concurrent.P
+DEP_FILES=.deps/common_ops.P .deps/measure.P .deps/heap.P .deps/array_heap.P .deps/dl_skiplist.P .deps/fc_dl_skiplist.P .deps/flat_combining.P .deps/bm_fc_skiplist.P .deps/bm_flat_combining.P .deps/test_concurrent.P
 
 all: test_concurrent
 

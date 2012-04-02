@@ -12,6 +12,7 @@
 #include "array_heap.h"
 #include "dl_skiplist.h"
 #include "fc_dl_skiplist.h"
+#include "bm_fc_skiplist.h" 
 #include "common_ops.h"
 #include "rq_heap.h"
 #include "measure.h"
@@ -35,6 +36,8 @@ dl_skiplist_t pull_dl_skiplist;
 fc_dl_skiplist_t push_fc_skiplist;
 fc_dl_skiplist_t pull_fc_skiplist;
 
+fc_sl_t push_bm_fc_skiplist;
+fc_sl_t pull_bm_fc_skiplist;
 
 pthread_t threads[NPROCESSORS];
 sem_t start_barrier_sem, end_barrier_sem;
@@ -53,10 +56,11 @@ extern struct data_struct_ops array_heap_ops;
 extern struct data_struct_ops heap_ops;
 extern struct data_struct_ops dl_skiplist_ops;
 extern struct data_struct_ops fc_dl_skiplist_ops;
+extern struct data_struct_ops bm_fc_skiplist_ops;
 
 struct rq *cpu_to_rq[NPROCESSORS];
 
-typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2, FC_SKIPLIST=3} data_struct_t;
+typedef enum {HEAP=0, ARRAY_HEAP=1, SKIPLIST=2, FC_SKIPLIST=3, BM_FC_SKIPLIST=4} data_struct_t;
 typedef enum {ARRIVAL=0, FINISH=1, NOTHING=2} operation_t;
 /*
  * 20% probability of new arrival
@@ -546,10 +550,11 @@ data_struct_t parse_user_options(int argc, char **argv)
 			"\t  -a array_heap\n"
 			"\t  -h heap\n"
 			"\t  -s skiplist\n"
-			"\t  -f flat_combining_skiplist\n");
+			"\t  -f flat_combining_skiplist\n"
+			"\t  -f bitmap_flat_combining_skiplist\n");
 		exit(-1);
 	}
-	while ((c = getopt(argc, argv, "hasf")) != -1)
+	while ((c = getopt(argc, argv, "hasfb")) != -1)
 		switch (c) {
 			case 'h':
 				data_type = HEAP;
@@ -574,6 +579,12 @@ data_struct_t parse_user_options(int argc, char **argv)
 				dso = &fc_dl_skiplist_ops;
 				push_data_struct = &push_fc_skiplist;
 				pull_data_struct = &pull_fc_skiplist;
+				break;
+			case 'b':
+				data_type = BM_FC_SKIPLIST;
+				dso = &bm_fc_skiplist_ops;
+				push_data_struct = &push_bm_fc_skiplist;
+				pull_data_struct = &pull_bm_fc_skiplist;
 				break;
 			default:
 				printf("data_type is not valid!\n");
@@ -619,6 +630,11 @@ int main(int argc, char **argv)
 		dso->data_init(push_data_struct, NPROCESSORS, __dl_time_after);
 		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_before);
 		printf("Initializing the flat_combining_skiplist\n");
+		break;
+			case BM_FC_SKIPLIST:
+		dso->data_init(push_data_struct, NPROCESSORS, __dl_time_after);
+		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_before);
+		printf("Initializing the bitmap_flat_combining_skiplist\n");
 		break;
 	    default:
 		exit(-1);

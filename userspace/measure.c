@@ -181,11 +181,12 @@ struct timespec get_elapsed_time(const struct timespec start, const struct times
  * @max:			maximum measure result
  * @number:		measures number
  */
-void common_measure_print(char *variable, uint64_t avg, uint64_t max, uint64_t number)
+void common_measure_print(char *variable, uint64_t avg, uint64_t max, uint64_t min, uint64_t number)
 {
 	printf("%s takes\n", variable);
 	printf("avg)\tticks: %15llu\n", avg);
 	printf("max)\tticks: %15llu\n", max);
+	printf("min)\tticks: %15llu\n", min);
 	printf("%s total number: %llu\n", variable, number);
 }
 
@@ -206,7 +207,7 @@ void common_measure_outcome_print(char *variable, uint64_t success, uint64_t fai
  * thread_local_measure_print - print thread-local 
  * measure result helper function
  * @sum_elapsed:	array of elapsed time (for each thread)
- * @max_elapsed:	array of max elapsed (for each thread)
+ * @max_elapsed:	array of max elapsed time (for each thread)
  */
 void thread_local_measure_print(uint64_t *sum_elapsed, uint64_t *max_elapsed)
 {

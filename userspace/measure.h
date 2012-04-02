@@ -7,9 +7,10 @@
 #include "parameters.h"
 
 /*
- * As recommended by Intel we repeat 
- * the rdtsc cost measurement 3 times
- * see http://www.ccsl.carleton.ca/~jamuir/rdtscpm1.pdf
+ * As recommended by Intel we have to
+ * repeat the rdtsc cost measurement 
+ * at least 3 times.
+ * See http://www.ccsl.carleton.ca/~jamuir/rdtscpm1.pdf
  * for more details
  */
 #define CALIBRATION_CYCLES		3
@@ -56,6 +57,7 @@
 #define _END_TICKS(prefix) uint64_t IDENTIFIER(prefix, _end_ticks)
 #define _CURRENT_ELAPSED(prefix) uint64_t IDENTIFIER(prefix, _current_elapsed)
 #define _MAX_ELAPSED(prefix) uint64_t IDENTIFIER(prefix, _max_elapsed)
+#define _MIN_ELAPSED(prefix) uint64_t IDENTIFIER(prefix, _min_elapsed)
 #define _SUM_ELAPSED(prefix) uint64_t IDENTIFIER(prefix, _sum_elapsed)
 
 #define __START_TICKS(prefix, number) _START_TICKS(prefix)[number]
@@ -97,10 +99,12 @@
 #define ALL_COUNTER(prefix) _N_ALL(prefix);
 
 #define COMMON_MEASURE_VARIABLE(prefix) \
+	_MIN_ELAPSED(prefix) = ~0ULL; \
 	_MAX_ELAPSED(prefix); \
 	_SUM_ELAPSED(prefix);
 
 #define EXTERN_COMMON_MEASURE_VARIABLE(prefix) \
+	EXTERN_DECL(_MIN_ELAPSED(prefix)); \
 	EXTERN_DECL(_MAX_ELAPSED(prefix)); \
 	EXTERN_DECL(_SUM_ELAPSED(prefix));
 
@@ -127,17 +131,29 @@
 				continue;\
 		else\
 			break;\
+	}\
+	/* 
+	 * if CAS fails we need to check 
+	 * min_elapsed again (it may be higher) 
+	 */\
+	while(1){\
+		if(IDENTIFIER(variable, _current_elapsed) < IDENTIFIER(variable, _min_elapsed) && \
+			!__sync_bool_compare_and_swap(&IDENTIFIER(variable, _min_elapsed), IDENTIFIER(variable, _min_elapsed), IDENTIFIER(variable, _current_elapsed)))\
+				continue;\
+		else\
+			break;\
 	}	
 
 #define COMMON_MEASURE_REGISTER_OUTCOME(variable, result, bad_value) \
 	if(result != bad_value)\
 		while(!__sync_bool_compare_and_swap(&IDENTIFIER(variable, _n_success), IDENTIFIER(variable, _n_success), IDENTIFIER(variable, _n_success) + 1))\
 		;\
-	else\
+	else{\
 		while(!__sync_bool_compare_and_swap(&IDENTIFIER(variable, _n_fail), IDENTIFIER(variable, _n_fail), IDENTIFIER(variable, _n_fail) + 1))\
 		;\
+	}
 
-#define COMMON_MEASURE_PRINT(variable) common_measure_print(#variable, IDENTIFIER(variable, _sum_elapsed) / IDENTIFIER(variable, _n_all), IDENTIFIER(variable, _max_elapsed), IDENTIFIER(variable, _n_all))
+#define COMMON_MEASURE_PRINT(variable) common_measure_print(#variable, IDENTIFIER(variable, _sum_elapsed) / IDENTIFIER(variable, _n_all), IDENTIFIER(variable, _max_elapsed), IDENTIFIER(variable, _min_elapsed), IDENTIFIER(variable, _n_all))
 
 #define COMMON_MEASURE_OUTCOME_PRINT(variable) common_measure_outcome_print(#variable, IDENTIFIER(variable, _n_success), IDENTIFIER(variable, _n_fail))
 
@@ -201,7 +217,7 @@ struct timespec get_elapsed_time(const struct timespec start, const struct times
 
 /* measurement print interface */
 
-void common_measure_print(char *variable, uint64_t avg, uint64_t max, uint64_t number);
+void common_measure_print(char *variable, uint64_t avg, uint64_t max, uint64_t min, uint64_t number);
 void common_measure_outcome_print(char *variable, uint64_t success, uint64_t fail);
 void thread_local_measure_print(uint64_t *sum_elapsed, uint64_t *max_elapsed);
 
