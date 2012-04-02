@@ -17,50 +17,6 @@
 #include "measure.h"
 #include "parameters.h"
 
-/*
- * TODO:
- * il simulatore, per simulare un task in esecuzione su una CPU, va in sleep. Togliere nanosleep e implementare la simulazione
- * di esecuzione task con un ciclo for o altro.
- * il simulatore indicava spesso che la push ritentava e la struttura dati indicava sempre la solita runqueue. Indaga.
- * modularizza la funzione processor dividendo in questo modo:
-		1) check se l'attuale task ha deadline > del curr_clock => finish per l'attuale task
-		2) sorteggia una nuova operazione
- * la simulazione attuale è molto diversa da quello che c'è nel kernel. Qui si fa una comparazione fra il curr_clock
-		e la deadline del primo task della runqueue per capire quando c'è una finish. Nel kernel si usa CBS, perciò ogni task
-		ha una deadline e un runtime. Quando quest'ultimo va ad un valore <= 0 si deve avere un replenishment (e la deadline viene
-		posta più avanti)
- * substitute __u64 with u64
- * check comments (especially in in rq_heap.h, dl_skiplist.c and fc_dl_skiplist.c)
- * add idle cpu mask implementation (like Linux Kernel)
- * add a double_lock_balance FAIR implementation in common_ops.c (like Linux Kernel)
- * update fc_dl_skiplist with new ideas
- *
- * FIXME (per misure):
- * Instructions reordering
- * page-fault avoidance
- * cache miss avoidance (vedi test_concurrent.c (es. array di variabili [NPROCESSORS] per cycle e sleep))
- * deep idle mode
- * accounting bad result time	!!!!!!!!!!!!!!!!!!!!!!
- *
- * 
- * SCRIVI NEGLI APPUNTI PERCHE' USARE ASM VOLATILE (http://www.ibiblio.org/gferg/ldp/GCC-Inline-Assembly-HOWTO.html#ss5.4)
- * E PERCHE' USARE RDTSCP ANZICHE' RDTSC (http://en.wikipedia.org/wiki/Time_Stamp_Counter)) 
- */
-
-/*
- * NOTE:
- * modificata implementazione dl_skiplist in modo da marcare i nodi allocati ma non inseriti nella skiplist
- * tali nodi hanno level = -1 (modificato tipo di level e rimosso qualificatore unsigned)
- * nella dl_sl_remove_idx() non si rimuove il nodo indicato se level < 0
- * dl_sl_preempt() e dl_sl_finish() sono esattamente uguali, utilizzo solo la dl_sl_preempt() 
- * dl_sl_check() rimosso controllo numero elementi skiplist: adesso le cpu idle mancano nella skiplist
- * aggiunto dl_sl_check_cpu() per verificare la deadline memorizzata per una data cpu
- * ATTENZIONE: per far terminare correttamente la simulazione: al momento della distruzione della runqeueue faccio
- * dso->data_preempt() per push_data_struct e pull_data_struct, con is_valid == 0. In questo modo i nodi delle cpu associate
- * non compaiono nella struttura, e pertanto la dso->data_find NON tornerà mai quegli indici!!!
- * aggiornata funzione dl_sl_save
- */
-
 #ifdef VERBOSE
 #define PRINT_OP(i, op, dline) printf("%d) %s, dline %llu\n", i, op, dline)
 #else 
