@@ -171,7 +171,7 @@ void signal_handler(int sig)
 void *processor(void *arg)
 {
 	int index = *((int*)arg);
-	int i, is_valid = 0, res, cpu;
+	int i, is_valid = 0, res;
 	struct rq rq;
 	struct rq_heap_node *min, *node;
 	struct task_struct *min_tsk, *new_tsk;

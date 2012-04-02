@@ -94,8 +94,6 @@ void max_heapify(array_heap_t *h, int idx) {
  * Sets a new key for the element at position idx.
  */
 void heap_change_key(array_heap_t *h, int idx, __u64 new_dl, int was_valid) {
-	int cpu;
-
 	if (h->cmp_dl(new_dl, h->elements[idx].dl) && was_valid) {
 #ifdef DEBUG
 		printf("[IF] key of element: %d %llu->%llu\n", idx,
