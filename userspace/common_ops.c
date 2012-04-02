@@ -30,7 +30,7 @@ int __dl_time_before(__u64 a, __u64 b)
  */
 int __dl_time_after(__u64 a, __u64 b)
 {
-	return (__s64)(a - b) >= 0;
+	return (__s64)(a - b) > 0;
 }
 
 /*

@@ -50,7 +50,7 @@ tags:
 
 
 clean:
-	rm -f *.mod *.o *.obj .deps/*.P .lo
+	rm -f *.mod *.o *.obj .deps/*.P .lo log-* *log.txt
 
 .PHONY: dist
 

@@ -62,7 +62,7 @@ int fc_dl_sl_find(void *s);
 int fc_dl_sl_max(void *s);
 
 void fc_dl_sl_load(void *s, FILE *f);
-void fc_dl_sl_save(void *s, FILE *f);
+void fc_dl_sl_save(void *s, int nproc, FILE *f);
 void fc_dl_sl_print(void *s, int nproc);
 
 int fc_dl_sl_check(void *s, int nproc);

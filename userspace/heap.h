@@ -59,7 +59,7 @@ int heap_finish(void *s, int proc, __u64 deadline, int is_valid);
 void heap_print(void *s, int nproc);
 int heap_check(void *s, int nproc);
 
-void heap_save(void *s, FILE *f);
+void heap_save(void *s, int nproc, FILE *f);
 void heap_load(void *s, FILE *f);
 
 #endif

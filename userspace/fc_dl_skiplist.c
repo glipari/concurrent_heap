@@ -608,7 +608,7 @@ void fc_dl_sl_load(void *s, FILE *f){
 	pthread_spin_unlock(&p->lock);
 }
 
-void fc_dl_sl_save(void *s, FILE *f){
+void fc_dl_sl_save(void *s, int nproc, FILE *f){
 	fc_dl_skiplist_t *p = (fc_dl_skiplist_t *)s;
 	
 	pthread_spin_lock(&p->lock);

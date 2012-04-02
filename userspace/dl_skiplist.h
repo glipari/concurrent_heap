@@ -57,7 +57,7 @@ int dl_sl_find(void *s);
 int dl_sl_max(void *s);
 
 void dl_sl_load(void *s, FILE *f);
-void dl_sl_save(void *s, FILE *f);
+void dl_sl_save(void *s, int nproc, FILE *f);
 void dl_sl_print(void *s, int nproc);
 
 int dl_sl_check(void *s, int nproc);
