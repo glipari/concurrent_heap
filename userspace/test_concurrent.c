@@ -76,8 +76,8 @@ array_heap_t pull_array_heap;
 dl_skiplist_t push_dl_skiplist;
 dl_skiplist_t pull_dl_skiplist;
 
-fc_sl_t push_fc_skiplist;
-fc_sl_t pull_fc_skiplist;
+fc_dl_skiplist_t push_fc_skiplist;
+fc_dl_skiplist_t pull_fc_skiplist;
 
 
 pthread_t threads[NPROCESSORS];
