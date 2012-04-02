@@ -29,7 +29,7 @@ struct data_struct_ops {
 	int (*data_max) (void *s);
 
 	void (*data_load) (void *s, FILE *f);
-	void (*data_save) (void *s, FILE *f);
+	void (*data_save) (void *s, int nproc, FILE *f);
 	void (*data_print) (void *s, int nproc);
 
 	int (*data_check) (void *s, int nproc);

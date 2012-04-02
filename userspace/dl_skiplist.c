@@ -356,7 +356,7 @@ void dl_sl_load(void *s, FILE *f){
 	//dl_skiplist_t *p = (dl_skiplist_t *)s;
 }
 
-void dl_sl_save(void *s, FILE *f){
+void dl_sl_save(void *s, int nproc, FILE *f){
 	dl_skiplist_t *p = (dl_skiplist_t *)s;
 	struct dl_sl_node *node;
 	int i;
@@ -388,7 +388,7 @@ void dl_sl_save(void *s, FILE *f){
 
 /* nproc non è utilizzato qui */
 void dl_sl_print(void *s, int nproc){
-	dl_sl_save(s, stdout);	
+	dl_sl_save(s, nproc, stdout);	
 }
 
 int dl_sl_check(void *s, int nproc){

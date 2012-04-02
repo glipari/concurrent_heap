@@ -145,15 +145,16 @@ int num_pull[NPROCESSORS];
  */
 void signal_handler(int sig)
 {
-    int i;
-    printf("\nEXITING!\n");
-		printf("----Push Data Structure----\n");
-    dso->data_print(push_data_struct, NPROCESSORS);
-		printf("----Pull Data Structure----\n");
-		dso->data_print(pull_data_struct, NPROCESSORS);
-    for (i=0; i<NPROCESSORS; i++) 
-        printf("Index %d, ID %ld\n", i, (threads[i] % 100));
-    exit(-1);
+	int i;
+	printf("\nEXITING!\n");
+
+	printf("----Push Data Structure----\n");
+	dso->data_print(push_data_struct, NPROCESSORS);
+	printf("----Pull Data Structure----\n");
+	dso->data_print(pull_data_struct, NPROCESSORS);
+	for (i = 0; i < NPROCESSORS; i++) 
+		printf("Index %d, ID %ld\n", i, (threads[i] % 100));
+	exit(-1);
 }
 
 /*
@@ -480,10 +481,10 @@ void *checker(void *arg)
 
 #ifdef DEBUG
 		fprintf(error_log, "*****PUSH DATA STRUCTURE****\n");
-		dso->data_save(push_data_struct, error_log);
+		dso->data_save(push_data_struct, NPROCESSORS, error_log);
 		fprintf(error_log, "*****END PUSH DATA STRUCTURE****\n\n");
 		fprintf(error_log, "*****PULL DATA STRUCTURE****\n");
-		dso->data_save(pull_data_struct, error_log);
+		dso->data_save(pull_data_struct, NPROCESSORS, error_log);
 		fprintf(error_log, "*****END PULL DATA STRUCTURE****\n\n");
 #endif
 
@@ -605,19 +606,23 @@ int main(int argc, char **argv)
     		printf("Initializing the heap\n");
 		break;
 	    case ARRAY_HEAP:
+		dso->data_init(push_data_struct, NPROCESSORS, __dl_time_before);
+		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_after);
     		printf("Initializing the array_heap\n");
 		break;
 	    case SKIPLIST:
-				printf("Initializing the skiplist\n");
+		dso->data_init(push_data_struct, NPROCESSORS, __dl_time_after);
+		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_before);
+		printf("Initializing the skiplist\n");
 		break;
-			case FC_SKIPLIST:
-				printf("Initializing the flat_combining_skiplist\n");
+	    case FC_SKIPLIST:
+		dso->data_init(push_data_struct, NPROCESSORS, __dl_time_after);
+		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_before);
+		printf("Initializing the flat_combining_skiplist\n");
 		break;
 	    default:
 		exit(-1);
     }
-    dso->data_init(push_data_struct, NPROCESSORS, __dl_time_after);
-		dso->data_init(pull_data_struct, NPROCESSORS, __dl_time_before);
 
 #ifndef MEASURE
     printf("Creating Checker\n");
@@ -631,14 +636,14 @@ int main(int argc, char **argv)
 		sem_init(&start_barrier_sem, 0, 0);
 		sem_init(&end_barrier_sem, 0, 0);
 
-    for (i=0; i<NPROCESSORS; i++) {
+    for (i = 0; i < NPROCESSORS; i++) {
         ind[i] = i;
         pthread_create(&threads[i], 0, processor, &ind[i]);
     }
 
     printf("Waiting for the end\n");
 
-    for (i=0; i<NPROCESSORS; i++) {
+    for (i = 0; i < NPROCESSORS; i++) {
         pthread_join(threads[i], 0);
 				printf("+++++++++++++++++++++++++++++++++\n");
         printf("Num Arrivals [%d]: %d\n", i, num_arrivals[i]);

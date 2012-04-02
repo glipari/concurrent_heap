@@ -39,12 +39,13 @@ void exchange(array_heap_t *h, int a, int b) {
 	h->cpu_to_idx[cpu_a] = cpu_tmp;
 }
 
-void array_heap_init(void *s, int nproc) {
+void array_heap_init(void *s, int nproc, int (*cmp_dl)(__u64 a, __u64 b)) {
 	int i;
 	array_heap_t *h = (array_heap_t*) s;
 
 	pthread_spin_init(&h->lock, 0);
 	h->size = 0;
+	h->cmp_dl = cmp_dl;
 	h->cpu_to_idx = (int*)malloc(sizeof(int)*nproc);
 	h->elements = (item*)malloc(sizeof(item)*nproc);
 
@@ -54,23 +55,7 @@ void array_heap_init(void *s, int nproc) {
 }
 
 void print_array_heap(void *s, int nproc) {
-	int i;
-	array_heap_t *h = (array_heap_t*) s;
-
-	pthread_spin_lock(&h->lock);
-	printf("Heap (%d elements):\n", h->size);
-	printf("[ ");
-	for (i = 0; i < h->size; i++)
-		printf("(%d, %llu) ", h->elements[i].cpu, h->elements[i].dl);
-	printf("] ");
-	/*for (i = h->size; i < nproc; i++)
-		printf("(%d, %llu) ", h->elements[i].cpu, h->elements[i].dl);
-	printf("\n");*/
-	printf("Cpu_to_idx:");
-	for (i = 0; i < nproc; i++)
-		printf(" %d", h->cpu_to_idx[i]);
-	printf("\n");
-	pthread_spin_unlock(&h->lock);
+	array_heap_save(s, nproc, stdout);
 }
 
 /* 
@@ -87,11 +72,11 @@ void max_heapify(array_heap_t *h, int idx) {
 	printf("l = (%d,%llu), r = (%d,%llu)\n", l, h->elements[l].dl,
 			r, h->elements[r].dl);
 #endif
-	if ((l < h->size) && __dl_time_before(h->elements[idx].dl, h->elements[l].dl))
+	if ((l < h->size) && h->cmp_dl(h->elements[idx].dl, h->elements[l].dl))
 		largest = l;
 	else
 		largest = idx;
-	if ((r < h->size) && __dl_time_before(h->elements[largest].dl,
+	if ((r < h->size) && h->cmp_dl(h->elements[largest].dl,
 				h->elements[r].dl))
 		largest = r;
 	if (largest != idx) {
@@ -108,21 +93,23 @@ void max_heapify(array_heap_t *h, int idx) {
 /* 
  * Sets a new key for the element at position idx.
  */
-void heap_change_key(array_heap_t *h, int idx, __u64 new_dl) {
+void heap_change_key(array_heap_t *h, int idx, __u64 new_dl, int was_valid) {
 	int cpu;
 
-	if (__dl_time_before(new_dl, h->elements[idx].dl)) {
-		h->elements[idx].dl = new_dl;
+	if (h->cmp_dl(new_dl, h->elements[idx].dl) && was_valid) {
 #ifdef DEBUG
-		printf("decreasing key for element: %d\n", idx);
+		printf("[IF] key of element: %d %llu->%llu\n", idx,
+			h->elements[idx].dl, new_dl);
 #endif
+		h->elements[idx].dl = new_dl;
 		max_heapify(h, idx);
 	} else {
-		h->elements[idx].dl = new_dl;
 #ifdef DEBUG
-		printf("increasing key for element: %d\n", idx);
+		printf("[ELSE] key of element: %d %llu->%llu\n", idx,
+			h->elements[idx].dl, new_dl);
 #endif
-		while (idx > 0 && __dl_time_before(h->elements[parent(idx)].dl,
+		h->elements[idx].dl = new_dl;
+		while (idx > 0 && h->cmp_dl(h->elements[parent(idx)].dl,
 					h->elements[idx].dl)) {
 			exchange(h, idx, parent(idx));
 			idx = parent(idx);
@@ -146,6 +133,12 @@ int heap_set(void *s, int cpu, __u64 dline, int is_valid) {
 
 	pthread_spin_lock(&h->lock);
 	old_idx = h->cpu_to_idx[cpu];
+	
+	if (!is_valid && old_idx == IDX_INVALID) {
+		pthread_spin_unlock(&h->lock);
+		return -1;
+	}
+
 	if (!is_valid) {
 		new_cpu = h->elements[h->size - 1].cpu;
 		h->elements[old_idx].dl = h->elements[h->size - 1].dl;
@@ -154,7 +147,7 @@ int heap_set(void *s, int cpu, __u64 dline, int is_valid) {
 		h->cpu_to_idx[new_cpu] = old_idx;
 		h->cpu_to_idx[cpu] = IDX_INVALID;
 		while (old_idx > 0 &&
-			__dl_time_before(h->elements[parent(old_idx)].dl,
+			h->cmp_dl(h->elements[parent(old_idx)].dl,
 				h->elements[old_idx].dl)) {
 			exchange(h, old_idx, parent(old_idx));
 			old_idx = parent(old_idx);
@@ -170,9 +163,9 @@ int heap_set(void *s, int cpu, __u64 dline, int is_valid) {
 		h->elements[h->size - 1].dl = 0;
 		h->elements[h->size - 1].cpu = cpu;
 		h->cpu_to_idx[cpu] = h->size - 1;
-		heap_change_key(h, h->size - 1, dline);
+		heap_change_key(h, h->size - 1, dline, 0);
 	} else {
-		heap_change_key(h, old_idx, dline);
+		heap_change_key(h, old_idx, dline, 1);
 	}
 
 	pthread_spin_unlock(&h->lock);
@@ -243,7 +236,7 @@ int array_heap_check(void *s, int nproc)
 		/*
 		 * check if dline(i) > dline(left_child(i))
 		 */
-		if (left_child(i) < h->size && __dl_time_before(h->elements[i].dl,
+		if (left_child(i) < h->size && h->cmp_dl(h->elements[i].dl,
 				h->elements[left_child(i)].dl) &&
 				h->cpu_to_idx[i] != IDX_INVALID) {
 			printf("Node %d has deadline %llu which is smaller"
@@ -257,7 +250,7 @@ int array_heap_check(void *s, int nproc)
 		/*
 		 * check if dline(i) > dline(right_child(i))
 		 */
-		if (right_child(i) < h->size && __dl_time_before(h->elements[i].dl,
+		if (right_child(i) < h->size && h->cmp_dl(h->elements[i].dl,
 				h->elements[right_child(i)].dl) &&
 				h->cpu_to_idx[i] != IDX_INVALID) {
 			printf("Node %d has deadline %llu which is smaller"
@@ -276,8 +269,26 @@ out:
 	return flag;
 }
 
-void array_heap_save(void *s, FILE *f)
+void array_heap_save(void *s, int nproc, FILE *f)
 {
+	int i;
+	array_heap_t *h = (array_heap_t*) s;
+
+	pthread_spin_lock(&h->lock);
+	fprintf(f, "Heap (%d elements):\n", h->size);
+	fprintf(f, "[ ");
+	for (i = 0; i < h->size; i++)
+		fprintf(f, "(%d, %llu) ", h->elements[i].cpu, h->elements[i].dl);
+	fprintf(f, "] ");
+	/*for (i = h->size; i < nproc; i++)
+		printf("(%d, %llu) ", h->elements[i].cpu, h->elements[i].dl);
+	printf("\n");*/
+	fprintf(f, "Cpu_to_idx:");
+	for (i = 0; i < nproc; i++)
+		fprintf(f, " %d", h->cpu_to_idx[i]);
+	fprintf(f, "\n");
+	pthread_spin_unlock(&h->lock);
+
 	return;
 }
 
@@ -288,7 +299,26 @@ void array_heap_cleanup(void *s)
 
 int array_heap_find(void *s)
 {
-	return 0;
+	int cpu = -1;
+	array_heap_t *h = (array_heap_t*) s;
+
+	if (h->size > 0)
+		cpu = heap_maximum(s);
+
+	return cpu;
+}
+
+int array_heap_check_cpu (void *s, int cpu, __u64 dline){
+	array_heap_t *h = (array_heap_t*) s;
+	int flag = 0;
+
+	pthread_spin_lock(&h->lock);
+	if (h->elements[h->cpu_to_idx[cpu]].dl == dline)
+		flag = 1;
+
+	pthread_spin_unlock(&h->lock);
+	
+	return flag;
 }
 
 const struct data_struct_ops array_heap_ops = {
@@ -302,4 +332,5 @@ const struct data_struct_ops array_heap_ops = {
 	.data_save = array_heap_save,
 	.data_check = array_heap_check,
 	.data_print = print_array_heap,
+	.data_check_cpu = array_heap_check_cpu
 };

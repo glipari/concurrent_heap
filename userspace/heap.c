@@ -321,7 +321,7 @@ int heap_check(void *s, int nproc)
     return flag;
 }
 
-void heap_save(void *s, FILE *f)
+void heap_save(void *s, int nproc, FILE *f)
 {
     int i;
     heap_t *h = (heap_t*) s;
