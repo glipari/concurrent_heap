@@ -81,10 +81,14 @@
 	EXTERN_DECL(__SUM_ELAPSED(prefix, number));
 
 #define THREAD_LOCAL_MEASURE_START(variable, thread_index)\
-	IDENTIFIER(variable, _start_ticks[thread_index]) = get_ticks();
+	__sync_synchronize();\
+	IDENTIFIER(variable, _start_ticks[thread_index]) = get_ticks();\
+	__sync_synchronize();
 
 #define THREAD_LOCAL_MEASURE_END(variable, thread_index)\
+	__sync_synchronize();\
 	IDENTIFIER(cycle, _end_ticks[thread_index]) = get_ticks();\
+	__sync_synchronize();\
 	IDENTIFIER(variable, _current_elapsed[thread_index]) = get_elapsed_ticks(IDENTIFIER(variable, _start_ticks[thread_index]), IDENTIFIER(variable, _end_ticks[thread_index]));\
 	if(IDENTIFIER(variable, _current_elapsed[thread_index]) > IDENTIFIER(variable, _max_elapsed[thread_index]))\
 		IDENTIFIER(variable, _max_elapsed[thread_index]) = IDENTIFIER(variable, _current_elapsed[thread_index]);\
@@ -112,10 +116,14 @@
 	_START_TICKS(variable);\
 	_END_TICKS(variable);\
 	_CURRENT_ELAPSED(variable);\
-	IDENTIFIER(variable, _start_ticks) = get_ticks();
+	__sync_synchronize();\
+	IDENTIFIER(variable, _start_ticks) = get_ticks();\
+	__sync_synchronize();
 
 #define COMMON_MEASURE_END(variable)\
+	__sync_synchronize(); \
 	IDENTIFIER(variable, _end_ticks) = get_ticks(); \
+	__sync_synchronize(); \
 	IDENTIFIER(variable, _current_elapsed) = get_elapsed_ticks(IDENTIFIER(variable, _start_ticks), IDENTIFIER(variable, _end_ticks));\
 	while(!__sync_bool_compare_and_swap(&IDENTIFIER(variable, _sum_elapsed), IDENTIFIER(variable, _sum_elapsed), IDENTIFIER(variable, _sum_elapsed) + IDENTIFIER(variable, _current_elapsed)))\
 		;\
